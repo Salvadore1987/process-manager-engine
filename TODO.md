@@ -2,32 +2,32 @@
 
 ## Phase 0: Gradle Multi-Module Skeleton
 
-- [ ] 0.1. Обновить `settings.gradle.kts` — добавить `include("core", "rabbitmq-transport", "spring-integration", "rest-api")`
-- [ ] 0.2. Создать `gradle/libs.versions.toml` — version catalog:
+- ✅ 0.1. Обновить `settings.gradle.kts` — добавить `include("core", "rabbitmq-transport", "spring-integration", "rest-api")`
+- ✅ 0.2. Создать `gradle/libs.versions.toml` — version catalog:
   - Jackson 2.17.x, JAXB 4.0.x, SLF4J 2.0.x, Micrometer 1.13.x
   - RabbitMQ amqp-client 5.21.x
   - Spring Boot 3.3.x, Spring Framework 6.1.x
   - JUnit 5.10.x, AssertJ 3.26.x, Testcontainers 1.19.x
-- [ ] 0.3. Переписать корневой `build.gradle.kts`:
+- ✅ 0.3. Переписать корневой `build.gradle.kts`:
   - `subprojects {}`: Java 21 toolchain, mavenCentral, JUnit 5 + AssertJ для всех модулей
   - Убрать текущие зависимости из корня (они переедут в модули)
-- [ ] 0.4. Создать `core/build.gradle.kts` — plugin `java-library`:
+- ✅ 0.4. Создать `core/build.gradle.kts` — plugin `java-library`:
   - `api`: jackson-databind, jackson-datatype-jsr310, jakarta.xml.bind-api, SLF4J API, micrometer-core
   - `implementation`: jaxb-runtime (glassfish)
   - `testImplementation`: JUnit 5, AssertJ
-- [ ] 0.5. Создать `rabbitmq-transport/build.gradle.kts` — plugin `java-library`:
+- ✅ 0.5. Создать `rabbitmq-transport/build.gradle.kts` — plugin `java-library`:
   - `api`: `project(":core")`
   - `implementation`: amqp-client, SLF4J
   - `testImplementation`: JUnit 5, AssertJ, testcontainers, testcontainers-rabbitmq
-- [ ] 0.6. Создать `spring-integration/build.gradle.kts` — plugin `java-library`:
+- ✅ 0.6. Создать `spring-integration/build.gradle.kts` — plugin `java-library`:
   - `api`: `project(":core")`
   - `implementation`: `project(":rabbitmq-transport")`, spring-boot-autoconfigure, spring-boot-actuator, micrometer-registry-prometheus
   - `compileOnly`: spring-boot-configuration-processor
-- [ ] 0.7. Создать `rest-api/build.gradle.kts` — plugins `java`, `org.springframework.boot`:
+- ✅ 0.7. Создать `rest-api/build.gradle.kts` — plugins `java`, `org.springframework.boot`:
   - `implementation`: `project(":spring-integration")`, spring-boot-starter-web, spring-boot-starter-actuator
   - `testImplementation`: spring-boot-starter-test, testcontainers
-- [ ] 0.8. Создать директории `src/main/java` и `src/test/java` для всех 4 модулей
-- [ ] 0.9. Проверить: `./gradlew build` проходит без ошибок
+- ✅ 0.8. Создать директории `src/main/java` и `src/test/java` для всех 4 модулей
+- ✅ 0.9. Проверить: `./gradlew build` проходит без ошибок
 
 ---
 

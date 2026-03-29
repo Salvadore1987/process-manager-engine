@@ -5,16 +5,30 @@ plugins {
 group = "uz.salvadore"
 version = "1.0-SNAPSHOT"
 
-repositories {
-    mavenCentral()
-}
+subprojects {
+    apply(plugin = "java")
 
-dependencies {
-    testImplementation(platform("org.junit:junit-bom:5.10.0"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
+    group = rootProject.group
+    version = rootProject.version
 
-tasks.test {
-    useJUnitPlatform()
+    java {
+        toolchain {
+            languageVersion.set(JavaLanguageVersion.of(21))
+        }
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        testImplementation(platform(rootProject.libs.junit.bom))
+        testImplementation(rootProject.libs.junit.jupiter)
+        testImplementation(rootProject.libs.assertj.core)
+        testRuntimeOnly(rootProject.libs.junit.platform.launcher)
+    }
+
+    tasks.test {
+        useJUnitPlatform()
+    }
 }
