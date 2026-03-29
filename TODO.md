@@ -259,45 +259,45 @@
 
 ### 5.1. Configuration
 
-- [ ] 5.1.1. Создать `RabbitMqTransportConfig` — host, port, username, password, exchange names, retry settings (maxAttempts, baseInterval)
+- ✅ 5.1.1. Создать `RabbitMqTransportConfig` — host, port, username, password, exchange names, retry settings (maxAttempts, baseInterval)
 
 ### 5.2. Connection Management
 
-- [ ] 5.2.1. Реализовать `RabbitMqConnectionManager` — создание Connection, channel pooling, graceful shutdown, auto-recovery
+- ✅ 5.2.1. Реализовать `RabbitMqConnectionManager` — создание Connection, channel pooling, graceful shutdown, auto-recovery
 
 ### 5.3. Topology
 
-- [ ] 5.3.1. Реализовать `RabbitMqTopologyInitializer` — declare exchanges (tasks, retry, dlq, timers), DLQ queue, bindings
-- [ ] 5.3.2. Lazy per-topic queue declaration: `task.{topic}.execute` и `task.{topic}.result` при первом использовании
+- ✅ 5.3.1. Реализовать `RabbitMqTopologyInitializer` — declare exchanges (tasks, retry, dlq, timers), DLQ queue, bindings
+- ✅ 5.3.2. Lazy per-topic queue declaration: `task.{topic}.execute` и `task.{topic}.result` при первом использовании
 
 ### 5.4. Transport Implementation
 
-- [ ] 5.4.1. Реализовать `CorrelationIdResolver` — extract/set correlation-id из AMQP headers
-- [ ] 5.4.2. Реализовать `RetryPolicy` — exponential backoff: baseInterval × 2^attempt, max cap
-- [ ] 5.4.3. Реализовать `RabbitMqMessageTransport` implements MessageTransport:
+- ✅ 5.4.1. Реализовать `CorrelationIdResolver` — extract/set correlation-id из AMQP headers
+- ✅ 5.4.2. Реализовать `RetryPolicy` — exponential backoff: baseInterval × 2^attempt, max cap
+- ✅ 5.4.3. Реализовать `RabbitMqMessageTransport` implements MessageTransport:
   - `send(topic, correlationId, payload)` → publish в `task.{topic}.execute`
   - subscribe на `task.{topic}.result` → callback с correlation matching
-- [ ] 5.4.4. Реализовать `TaskResultConsumer` — listen result queues, resolve correlation, callback to engine (virtual threads executor)
-- [ ] 5.4.5. Реализовать `DeadLetterConsumer` — listen DLQ, create incident records
+- ✅ 5.4.4. Реализовать `TaskResultConsumer` — listen result queues, resolve correlation, callback to engine (virtual threads executor)
+- ✅ 5.4.5. Реализовать `DeadLetterConsumer` — listen DLQ, create incident records
 
 ### 5.5. Timer Implementation
 
-- [ ] 5.5.1. Реализовать `RabbitMqTimerService` implements TimerService:
+- ✅ 5.5.1. Реализовать `RabbitMqTimerService` implements TimerService:
   - `schedule(processInstanceId, duration)` → publish в timers exchange с x-delay header
   - `cancel(processInstanceId)` — best-effort (отметить как cancelled, игнорировать при получении)
   - Consumer на timer queue → callback при срабатывании
 
 ### 5.6. Тесты Phase 5
 
-- [ ] 5.6.1. `RetryPolicyTest` (unit) — backoff: attempt 0=base, 1=2x, 2=4x, max cap
-- [ ] 5.6.2. `RabbitMqMessageTransportTest` (Testcontainers) — send message, consume, verify headers + content
-- [ ] 5.6.3. `RabbitMqMessageTransportTest` (Testcontainers) — send result, verify correlation-id matching
-- [ ] 5.6.4. `RabbitMqTopologyInitializerTest` (Testcontainers) — verify exchanges и queues created
-- [ ] 5.6.5. `RabbitMqTimerServiceTest` (Testcontainers) — schedule 1s timer, verify callback fires
-- [ ] 5.6.6. `RabbitMqRetryFlowTest` (Testcontainers) — task failure → retry with correct delay
-- [ ] 5.6.7. `RabbitMqRetryFlowTest` (Testcontainers) — exhaust retries → message in DLQ
-- [ ] 5.6.8. `RabbitMqConnectionManagerTest` (Testcontainers) — connection recovery
-- [ ] 5.6.9. Проверить: `./gradlew :rabbitmq-transport:test` проходит (Docker required)
+- ✅ 5.6.1. `RetryPolicyTest` (unit) — backoff: attempt 0=base, 1=2x, 2=4x, max cap
+- ✅ 5.6.2. `RabbitMqMessageTransportTest` (Testcontainers) — send message, consume, verify headers + content
+- ✅ 5.6.3. `RabbitMqMessageTransportTest` (Testcontainers) — send result, verify correlation-id matching
+- ✅ 5.6.4. `RabbitMqTopologyInitializerTest` (Testcontainers) — verify exchanges и queues created
+- ✅ 5.6.5. `RabbitMqTimerServiceTest` (Testcontainers) — schedule 1s timer, verify callback fires
+- ✅ 5.6.6. `RabbitMqRetryFlowTest` (Testcontainers) — task failure → retry with correct delay
+- ✅ 5.6.7. `RabbitMqRetryFlowTest` (Testcontainers) — exhaust retries → message in DLQ
+- ✅ 5.6.8. `RabbitMqConnectionManagerTest` (Testcontainers) — connection recovery
+- ✅ 5.6.9. Проверить: `./gradlew :rabbitmq-transport:test` проходит (Docker required)
 
 ---
 
