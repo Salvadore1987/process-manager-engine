@@ -192,31 +192,31 @@
 
 ### 4.1. Condition Evaluator
 
-- [ ] 4.1.1. Создать interface `ConditionEvaluator` (evaluate(expression, variables) → boolean)
-- [ ] 4.1.2. Реализовать `SimpleConditionEvaluator` — парсинг `${variable > value}`, `${variable == value}`, `${variable < value}`
+- ✅ 4.1.1. Создать interface `ConditionEvaluator` (evaluate(expression, variables) → boolean)
+- ✅ 4.1.2. Реализовать `SimpleConditionEvaluator` — парсинг `${variable > value}`, `${variable == value}`, `${variable < value}`
 
 ### 4.2. Execution Context
 
-- [ ] 4.2.1. Реализовать `ExecutionContext` — carries ProcessInstance state, variables, collects events
+- ✅ 4.2.1. Реализовать `ExecutionContext` — carries ProcessInstance state, variables, collects events
 
 ### 4.3. Node Handlers
 
-- [ ] 4.3.1. Создать interface `NodeHandler` — handle(Token, FlowNode, ExecutionContext) → List<ProcessEvent>
-- [ ] 4.3.2. Реализовать `StartEventHandler` — создаёт token на первый outgoing flow
-- [ ] 4.3.3. Реализовать `EndEventHandler` — completes token; если error end event → ProcessErrorEvent; если все токены completed → ProcessCompletedEvent
-- [ ] 4.3.4. Реализовать `ServiceTaskHandler` — token → WAITING, вызов MessageTransport.send(topic, correlationId, variables)
-- [ ] 4.3.5. Реализовать `ExclusiveGatewayHandler` — evaluate conditions, выбрать первый matching outgoing flow
-- [ ] 4.3.6. Реализовать `ParallelGatewayHandler` — fork: N tokens по outgoing flows; join: ждать все incoming, consume waiting tokens
-- [ ] 4.3.7. Реализовать `CallActivityHandler` — создать child ProcessInstance (parentProcessInstanceId), parent token → WAITING
-- [ ] 4.3.8. Реализовать `TimerBoundaryEventHandler` — вызов TimerService.schedule(), при срабатывании → cancel attached task, redirect flow
-- [ ] 4.3.9. Реализовать `ErrorBoundaryEventHandler` — catch error по errorCode, redirect flow
-- [ ] 4.3.10. Реализовать `CompensationBoundaryEventHandler` — trigger compensation task (association)
+- ✅ 4.3.1. Создать interface `NodeHandler` — handle(Token, FlowNode, ExecutionContext) → List<ProcessEvent>
+- ✅ 4.3.2. Реализовать `StartEventHandler` — создаёт token на первый outgoing flow
+- ✅ 4.3.3. Реализовать `EndEventHandler` — completes token; если error end event → ProcessErrorEvent; если все токены completed → ProcessCompletedEvent
+- ✅ 4.3.4. Реализовать `ServiceTaskHandler` — token → WAITING, вызов MessageTransport.send(topic, correlationId, variables)
+- ✅ 4.3.5. Реализовать `ExclusiveGatewayHandler` — evaluate conditions, выбрать первый matching outgoing flow
+- ✅ 4.3.6. Реализовать `ParallelGatewayHandler` — fork: N tokens по outgoing flows; join: ждать все incoming, consume waiting tokens
+- ✅ 4.3.7. Реализовать `CallActivityHandler` — создать child ProcessInstance (parentProcessInstanceId), parent token → WAITING
+- ✅ 4.3.8. Реализовать `TimerBoundaryEventHandler` — вызов TimerService.schedule(), при срабатывании → cancel attached task, redirect flow
+- ✅ 4.3.9. Реализовать `ErrorBoundaryEventHandler` — catch error по errorCode, redirect flow
+- ✅ 4.3.10. Реализовать `CompensationBoundaryEventHandler` — trigger compensation task (association)
 
 ### 4.4. Engine Core
 
-- [ ] 4.4.1. Реализовать `TokenExecutor` — Map<NodeType, NodeHandler>, dispatch token to correct handler
-- [ ] 4.4.2. Реализовать `ProcessDefinitionRepository` — in-memory registry (deploy, undeploy, getByKey, getById, list)
-- [ ] 4.4.3. Реализовать `ProcessEngine` — главный фасад:
+- ✅ 4.4.1. Реализовать `TokenExecutor` — Map<NodeType, NodeHandler>, dispatch token to correct handler
+- ✅ 4.4.2. Реализовать `ProcessDefinitionRepository` — in-memory registry (deploy, undeploy, getByKey, getById, list)
+- ✅ 4.4.3. Реализовать `ProcessEngine` — главный фасад:
   - `deploy(ProcessDefinition)` — регистрация определения
   - `startProcess(definitionKey, variables)` → ProcessInstance
   - `completeTask(correlationId, result)` — продвижение token после ответа от внешнего сервиса
@@ -228,30 +228,30 @@
 
 ### 4.5. Тесты Phase 4
 
-- [ ] 4.5.1. `SimpleConditionEvaluatorTest` — `${amount > 10000}` с разными значениями
-- [ ] 4.5.2. `StartEventHandlerTest` — creates token on outgoing flow
-- [ ] 4.5.3. `EndEventHandlerTest` — normal end completes token
-- [ ] 4.5.4. `EndEventHandlerTest` — error end emits ProcessErrorEvent
-- [ ] 4.5.5. `ServiceTaskHandlerTest` — sets token WAITING, calls MessageTransport.send
-- [ ] 4.5.6. `ExclusiveGatewayHandlerTest` — correct branch by condition
-- [ ] 4.5.7. `ExclusiveGatewayHandlerTest` — no matching condition → error
-- [ ] 4.5.8. `ParallelGatewayHandlerTest` — fork creates N tokens
-- [ ] 4.5.9. `ParallelGatewayHandlerTest` — join waits for all, then creates outgoing token
-- [ ] 4.5.10. `CallActivityHandlerTest` — creates child instance, parent token WAITING
-- [ ] 4.5.11. `TimerBoundaryEventHandlerTest` — schedules timer via TimerService
-- [ ] 4.5.12. `ErrorBoundaryEventHandlerTest` — catches error, redirects flow
-- [ ] 4.5.13. `CompensationBoundaryEventHandlerTest` — triggers compensation task
-- [ ] 4.5.14. `TokenExecutorTest` — dispatches to correct handler by NodeType
-- [ ] 4.5.15. `ProcessDefinitionRepositoryTest` — deploy, undeploy, getByKey (latest version)
-- [ ] 4.5.16. `ProcessEngineTest` — deploy + start → ProcessStartedEvent + token на первом ServiceTask
-- [ ] 4.5.17. `ProcessEngineTest` — completeTask → token advances to next node
-- [ ] 4.5.18. `ProcessEngineTest` — full linear process (Start → ServiceTask → End) → ProcessCompletedEvent
-- [ ] 4.5.19. `ProcessEngineTest` — suspend/resume lifecycle
-- [ ] 4.5.20. `ProcessEngineTest` — terminate running instance
-- [ ] 4.5.21. `OrderProcessE2ETest` — parse example-order-process.bpmn, deploy, start, complete all tasks (standard path: amount <= 10000), verify ProcessCompletedEvent
-- [ ] 4.5.22. `OrderProcessE2ETest` — high-value path (amount > 10000): fraud check → parallel → end
-- [ ] 4.5.23. `OrderProcessE2ETest` — event replay produces identical ProcessInstance state
-- [ ] 4.5.24. Проверить: `./gradlew :core:test` проходит
+- ✅ 4.5.1. `SimpleConditionEvaluatorTest` — `${amount > 10000}` с разными значениями
+- ✅ 4.5.2. `StartEventHandlerTest` — creates token on outgoing flow
+- ✅ 4.5.3. `EndEventHandlerTest` — normal end completes token
+- ✅ 4.5.4. `EndEventHandlerTest` — error end emits ProcessErrorEvent
+- ✅ 4.5.5. `ServiceTaskHandlerTest` — sets token WAITING, calls MessageTransport.send
+- ✅ 4.5.6. `ExclusiveGatewayHandlerTest` — correct branch by condition
+- ✅ 4.5.7. `ExclusiveGatewayHandlerTest` — no matching condition → error
+- ✅ 4.5.8. `ParallelGatewayHandlerTest` — fork creates N tokens
+- ✅ 4.5.9. `ParallelGatewayHandlerTest` — join waits for all, then creates outgoing token
+- ✅ 4.5.10. `CallActivityHandlerTest` — creates child instance, parent token WAITING
+- ✅ 4.5.11. `TimerBoundaryEventHandlerTest` — schedules timer via TimerService
+- ✅ 4.5.12. `ErrorBoundaryEventHandlerTest` — catches error, redirects flow
+- ✅ 4.5.13. `CompensationBoundaryEventHandlerTest` — triggers compensation task
+- ✅ 4.5.14. `TokenExecutorTest` — dispatches to correct handler by NodeType
+- ✅ 4.5.15. `ProcessDefinitionRepositoryTest` — deploy, undeploy, getByKey (latest version)
+- ✅ 4.5.16. `ProcessEngineTest` — deploy + start → ProcessStartedEvent + token на первом ServiceTask
+- ✅ 4.5.17. `ProcessEngineTest` — completeTask → token advances to next node
+- ✅ 4.5.18. `ProcessEngineTest` — full linear process (Start → ServiceTask → End) → ProcessCompletedEvent
+- ✅ 4.5.19. `ProcessEngineTest` — suspend/resume lifecycle
+- ✅ 4.5.20. `ProcessEngineTest` — terminate running instance
+- ✅ 4.5.21. `OrderProcessE2ETest` — parse example-order-process.bpmn, deploy, start, complete all tasks (standard path: amount <= 10000), verify ProcessCompletedEvent
+- ✅ 4.5.22. `OrderProcessE2ETest` — high-value path (amount > 10000): fraud check → parallel → end
+- ✅ 4.5.23. `OrderProcessE2ETest` — event replay produces identical ProcessInstance state
+- ✅ 4.5.24. Проверить: `./gradlew :core:test` проходит
 
 ---
 

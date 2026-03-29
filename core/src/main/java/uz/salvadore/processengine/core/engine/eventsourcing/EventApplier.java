@@ -63,11 +63,32 @@ public final class EventApplier {
 
     private ProcessInstance applyTokenMoved(TokenMovedEvent event, ProcessInstance instance) {
         List<Token> updatedTokens = new ArrayList<>();
+        boolean found = false;
         for (Token token : instance.getTokens()) {
             if (token.getId().equals(event.tokenId())) {
                 updatedTokens.add(Token.restore(token.getId(), event.toNodeId(), TokenState.ACTIVE));
+                found = true;
             } else {
                 updatedTokens.add(token);
+            }
+        }
+        if (!found) {
+            // Token was created by a handler (e.g. ParallelGateway fork) or is the initial
+            // token whose ID was not persisted in ProcessStartedEvent.
+            // Replace the __start__ placeholder token if present, otherwise add new.
+            boolean replacedPlaceholder = false;
+            if (event.fromNodeId() != null) {
+                for (int i = 0; i < updatedTokens.size(); i++) {
+                    Token t = updatedTokens.get(i);
+                    if ("__start__".equals(t.getCurrentNodeId()) && t.getState() == TokenState.ACTIVE) {
+                        updatedTokens.set(i, Token.restore(event.tokenId(), event.toNodeId(), TokenState.ACTIVE));
+                        replacedPlaceholder = true;
+                        break;
+                    }
+                }
+            }
+            if (!replacedPlaceholder) {
+                updatedTokens.add(Token.restore(event.tokenId(), event.toNodeId(), TokenState.ACTIVE));
             }
         }
         return instance.withTokens(updatedTokens);
