@@ -6,6 +6,7 @@ dependencies {
     api(project(":core"))
 
     implementation(project(":rabbitmq-transport"))
+    implementation(libs.rabbitmq.client)
     implementation(libs.spring.boot.autoconfigure)
     implementation(libs.spring.boot.actuator)
     implementation(libs.micrometer.registry.prometheus)
