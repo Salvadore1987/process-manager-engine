@@ -106,54 +106,54 @@
 
 ### 2.1. JAXB модель (hand-crafted)
 
-- [ ] 2.1.1. Создать `BpmnDefinitions` — корневой JAXB-элемент (`bpmn:definitions`)
-- [ ] 2.1.2. Создать `BpmnProcess` — `bpmn:process` (id, name, isExecutable, elements list)
-- [ ] 2.1.3. Создать `BpmnStartEvent` — `bpmn:startEvent`
-- [ ] 2.1.4. Создать `BpmnEndEvent` — `bpmn:endEvent` (+ errorEventDefinition)
-- [ ] 2.1.5. Создать `BpmnServiceTask` — `bpmn:serviceTask` (+ camunda:type, camunda:topic, isForCompensation)
-- [ ] 2.1.6. Создать `BpmnExclusiveGateway` — `bpmn:exclusiveGateway`
-- [ ] 2.1.7. Создать `BpmnParallelGateway` — `bpmn:parallelGateway`
-- [ ] 2.1.8. Создать `BpmnCallActivity` — `bpmn:callActivity` (+ calledElement)
-- [ ] 2.1.9. Создать `BpmnBoundaryEvent` — `bpmn:boundaryEvent` (+ attachedToRef, timerEventDefinition, errorEventDefinition, compensateEventDefinition)
-- [ ] 2.1.10. Создать `BpmnSequenceFlow` — `bpmn:sequenceFlow` (+ conditionExpression)
-- [ ] 2.1.11. Создать `BpmnAssociation` — `bpmn:association` (sourceRef, targetRef)
-- [ ] 2.1.12. Создать `BpmnError` — `bpmn:error` (id, name, errorCode)
+- ✅ 2.1.1. Создать `BpmnDefinitions` — корневой JAXB-элемент (`bpmn:definitions`)
+- ✅ 2.1.2. Создать `BpmnProcess` — `bpmn:process` (id, name, isExecutable, elements list)
+- ✅ 2.1.3. Создать `BpmnStartEvent` — `bpmn:startEvent`
+- ✅ 2.1.4. Создать `BpmnEndEvent` — `bpmn:endEvent` (+ errorEventDefinition)
+- ✅ 2.1.5. Создать `BpmnServiceTask` — `bpmn:serviceTask` (+ camunda:type, camunda:topic, isForCompensation)
+- ✅ 2.1.6. Создать `BpmnExclusiveGateway` — `bpmn:exclusiveGateway`
+- ✅ 2.1.7. Создать `BpmnParallelGateway` — `bpmn:parallelGateway`
+- ✅ 2.1.8. Создать `BpmnCallActivity` — `bpmn:callActivity` (+ calledElement)
+- ✅ 2.1.9. Создать `BpmnBoundaryEvent` — `bpmn:boundaryEvent` (+ attachedToRef, timerEventDefinition, errorEventDefinition, compensateEventDefinition)
+- ✅ 2.1.10. Создать `BpmnSequenceFlow` — `bpmn:sequenceFlow` (+ conditionExpression)
+- ✅ 2.1.11. Создать `BpmnAssociation` — `bpmn:association` (sourceRef, targetRef)
+- ✅ 2.1.12. Создать `BpmnError` — `bpmn:error` (id, name, errorCode)
 
 ### 2.2. Validator
 
-- [ ] 2.2.1. Создать `UnsupportedElementError` record (element, id, name, line)
-- [ ] 2.2.2. Создать `BpmnValidationResult` (valid boolean, List<UnsupportedElementError>)
-- [ ] 2.2.3. Реализовать `BpmnValidator` — whitelist поддерживаемых элементов, StAX-парсинг для line numbers, сбор всех неподдерживаемых элементов
+- ✅ 2.2.1. Создать `UnsupportedElementError` record (element, id, name, line)
+- ✅ 2.2.2. Создать `BpmnValidationResult` (valid boolean, List<UnsupportedElementError>)
+- ✅ 2.2.3. Реализовать `BpmnValidator` — whitelist поддерживаемых элементов, StAX-парсинг для line numbers, сбор всех неподдерживаемых элементов
 
 ### 2.3. Mappers
 
-- [ ] 2.3.1. Реализовать `FlowNodeMapper` — JAXB → domain FlowNode (для каждого из 9 типов)
-- [ ] 2.3.2. Реализовать `SequenceFlowMapper` — JAXB → domain SequenceFlow
-- [ ] 2.3.3. Реализовать `ProcessDefinitionMapper` — собирает полный ProcessDefinition из JAXB модели
+- ✅ 2.3.1. Реализовать `FlowNodeMapper` — JAXB → domain FlowNode (для каждого из 9 типов)
+- ✅ 2.3.2. Реализовать `SequenceFlowMapper` — JAXB → domain SequenceFlow
+- ✅ 2.3.3. Реализовать `ProcessDefinitionMapper` — собирает полный ProcessDefinition из JAXB модели
 
 ### 2.4. Parser
 
-- [ ] 2.4.1. Создать `BpmnParseException` checked exception
-- [ ] 2.4.2. Реализовать `BpmnParser` — JAXB unmarshal + validation + mapping → ProcessDefinition
+- ✅ 2.4.1. Создать `BpmnParseException` checked exception
+- ✅ 2.4.2. Реализовать `BpmnParser` — JAXB unmarshal + validation + mapping → ProcessDefinition
   - Кэширование JAXBContext (static, thread-safe)
   - Поддержка нескольких `bpmn:process` в одном файле
 
 ### 2.5. Тестовые ресурсы
 
-- [ ] 2.5.1. Скопировать `docs/example-order-process.bpmn` → `core/src/test/resources/bpmn/`
-- [ ] 2.5.2. Скопировать `docs/example-payment-process.bpmn` → `core/src/test/resources/bpmn/`
-- [ ] 2.5.3. Создать `core/src/test/resources/bpmn/invalid-unsupported-elements.bpmn` (с UserTask, ScriptTask)
+- ✅ 2.5.1. Скопировать `docs/example-order-process.bpmn` → `core/src/test/resources/bpmn/`
+- ✅ 2.5.2. Скопировать `docs/example-payment-process.bpmn` → `core/src/test/resources/bpmn/`
+- ✅ 2.5.3. Создать `core/src/test/resources/bpmn/invalid-unsupported-elements.bpmn` (с UserTask, ScriptTask)
 
 ### 2.6. Тесты Phase 2
 
-- [ ] 2.6.1. `BpmnParserTest` — парсинг example-order-process.bpmn: проверить все FlowNodes, SequenceFlows, topics, calledElement, boundary events
-- [ ] 2.6.2. `BpmnParserTest` — парсинг example-payment-process.bpmn: StartEvent → 2 ServiceTask → EndEvent
-- [ ] 2.6.3. `BpmnValidatorTest` — valid BPMN проходит валидацию
-- [ ] 2.6.4. `BpmnValidatorTest` — BPMN с UserTask/ScriptTask → ошибка с element details и line numbers
-- [ ] 2.6.5. `FlowNodeMapperTest` — маппинг каждого JAXB типа → domain тип
-- [ ] 2.6.6. `BpmnParserRoundtripTest` — граф order-processing: 17 nodes, корректные connections
-- [ ] 2.6.7. `BpmnParserTest` — malformed XML → BpmnParseException
-- [ ] 2.6.8. Проверить: `./gradlew :core:test` проходит
+- ✅ 2.6.1. `BpmnParserTest` — парсинг example-order-process.bpmn: проверить все FlowNodes, SequenceFlows, topics, calledElement, boundary events
+- ✅ 2.6.2. `BpmnParserTest` — парсинг example-payment-process.bpmn: StartEvent → 2 ServiceTask → EndEvent
+- ✅ 2.6.3. `BpmnValidatorTest` — valid BPMN проходит валидацию
+- ✅ 2.6.4. `BpmnValidatorTest` — BPMN с UserTask/ScriptTask → ошибка с element details и line numbers
+- ✅ 2.6.5. `FlowNodeMapperTest` — маппинг каждого JAXB типа → domain тип
+- ✅ 2.6.6. `BpmnParserRoundtripTest` — граф order-processing: 17 nodes, корректные connections
+- ✅ 2.6.7. `BpmnParserTest` — malformed XML → BpmnParseException
+- ✅ 2.6.8. Проверить: `./gradlew :core:test` проходит
 
 ---
 

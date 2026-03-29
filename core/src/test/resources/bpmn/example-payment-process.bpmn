@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  id="Definitions_Payment"
+                  targetNamespace="http://bpmn.io/schema/bpmn"
+                  exporter="Camunda Modeler"
+                  exporterVersion="5.x">
+
+  <!--
+    ============================================================
+    Payment Processing — дочерний процесс оплаты
+    ============================================================
+
+    Вызывается через CallActivity (calledElement="payment-processing")
+    из основного процесса order-processing.
+
+    Переменные не передаются из родительского процесса —
+    читаются из EventStore по parentProcessInstanceId.
+
+    При ошибке — ErrorEndEvent пробрасывает ошибку в родительский процесс
+    через ErrorBoundaryEvent на CallActivity.
+  -->
+
+  <bpmn:process id="payment-processing" name="Payment Processing" isExecutable="true">
+
+    <bpmn:startEvent id="StartEvent_Payment" name="Start Payment">
+      <bpmn:outgoing>Flow_P_ToCharge</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="Task_ChargePayment" name="Charge Payment"
+                      camunda:type="external"
+                      camunda:topic="payment.charge">
+      <bpmn:incoming>Flow_P_ToCharge</bpmn:incoming>
+      <bpmn:outgoing>Flow_P_ToConfirm</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_ConfirmPayment" name="Confirm Payment"
+                      camunda:type="external"
+                      camunda:topic="payment.confirm">
+      <bpmn:incoming>Flow_P_ToConfirm</bpmn:incoming>
+      <bpmn:outgoing>Flow_P_ToEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_PaymentSuccess" name="Payment Completed">
+      <bpmn:incoming>Flow_P_ToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- ==================== SEQUENCE FLOWS ==================== -->
+
+    <bpmn:sequenceFlow id="Flow_P_ToCharge"
+                       sourceRef="StartEvent_Payment" targetRef="Task_ChargePayment" />
+
+    <bpmn:sequenceFlow id="Flow_P_ToConfirm"
+                       sourceRef="Task_ChargePayment" targetRef="Task_ConfirmPayment" />
+
+    <bpmn:sequenceFlow id="Flow_P_ToEnd"
+                       sourceRef="Task_ConfirmPayment" targetRef="EndEvent_PaymentSuccess" />
+
+  </bpmn:process>
+
+  <!-- ==================== ERROR DEFINITIONS ==================== -->
+
+  <bpmn:error id="Error_PaymentFailed" name="Payment Failed" errorCode="PAYMENT_FAILED" />
+
+  <!-- ==================== DIAGRAM ==================== -->
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_PaymentProcessing">
+    <bpmndi:BPMNPlane id="BPMNPlane_PaymentProcessing" bpmnElement="payment-processing">
+
+      <bpmndi:BPMNShape id="Shape_StartPayment" bpmnElement="StartEvent_Payment">
+        <dc:Bounds x="160" y="190" width="36" height="36" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_ChargePayment" bpmnElement="Task_ChargePayment">
+        <dc:Bounds x="260" y="168" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_ConfirmPayment" bpmnElement="Task_ConfirmPayment">
+        <dc:Bounds x="420" y="168" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_EndPaymentSuccess" bpmnElement="EndEvent_PaymentSuccess">
+        <dc:Bounds x="580" y="190" width="36" height="36" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="Edge_P_ToCharge" bpmnElement="Flow_P_ToCharge">
+        <di:waypoint x="196" y="208" />
+        <di:waypoint x="260" y="208" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_P_ToConfirm" bpmnElement="Flow_P_ToConfirm">
+        <di:waypoint x="360" y="208" />
+        <di:waypoint x="420" y="208" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_P_ToEnd" bpmnElement="Flow_P_ToEnd">
+        <di:waypoint x="520" y="208" />
+        <di:waypoint x="580" y="208" />
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+
+</bpmn:definitions>
