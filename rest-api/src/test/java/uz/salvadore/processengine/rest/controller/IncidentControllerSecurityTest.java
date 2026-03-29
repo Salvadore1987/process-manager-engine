@@ -7,28 +7,28 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
 import uz.salvadore.processengine.core.engine.ProcessDefinitionRepository;
 import uz.salvadore.processengine.core.engine.ProcessEngine;
 import uz.salvadore.processengine.core.parser.BpmnParser;
 import uz.salvadore.processengine.core.port.outgoing.ProcessEventStore;
+import uz.salvadore.processengine.rest.config.SecurityEnabledTestConfig;
 import uz.salvadore.processengine.rest.dto.IncidentResolveDto;
 import uz.salvadore.processengine.rest.mapper.ProcessDefinitionDtoMapper;
-import uz.salvadore.processengine.rest.mapper.ProcessInstanceDtoMapper;
 import uz.salvadore.processengine.rest.mapper.ProcessEventDtoMapper;
-import uz.salvadore.processengine.rest.config.NoSecurityTestConfig;
+import uz.salvadore.processengine.rest.mapper.ProcessInstanceDtoMapper;
 
 import java.util.UUID;
 
-import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(IncidentController.class)
-@Import({ProcessDefinitionDtoMapper.class, ProcessInstanceDtoMapper.class, ProcessEventDtoMapper.class, NoSecurityTestConfig.class})
-class IncidentControllerTest {
+@Import({ProcessDefinitionDtoMapper.class, ProcessInstanceDtoMapper.class, ProcessEventDtoMapper.class, SecurityEnabledTestConfig.class})
+class IncidentControllerSecurityTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -49,33 +49,36 @@ class IncidentControllerTest {
     private ProcessEventStore processEventStore;
 
     @Test
-    void shouldListIncidentsAndReturnEmptyList() throws Exception {
-        // Arrange — no setup needed; controller always returns empty list
-
+    void shouldAllowViewerToListIncidents() throws Exception {
         // Act & Assert
-        mockMvc.perform(get("/api/v1/incidents"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
+        mockMvc.perform(get("/api/v1/incidents")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_PROCESS_VIEWER"))))
+                .andExpect(status().isOk());
     }
 
     @Test
-    void shouldReturn404WhenGettingIncidentById() throws Exception {
+    void shouldDenyViewerToResolveIncident() throws Exception {
         // Arrange
         UUID incidentId = UUID.randomUUID();
-
-        // Act & Assert
-        mockMvc.perform(get("/api/v1/incidents/{id}", incidentId))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
-    void shouldReturn404WhenResolvingIncident() throws Exception {
-        // Arrange
-        UUID incidentId = UUID.randomUUID();
-        IncidentResolveDto resolveDto = new IncidentResolveDto("retry");
+        IncidentResolveDto resolveDto = new IncidentResolveDto("RETRY");
 
         // Act & Assert
         mockMvc.perform(put("/api/v1/incidents/{id}/resolve", incidentId)
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_PROCESS_VIEWER")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(resolveDto)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shouldAllowAdminToResolveIncident() throws Exception {
+        // Arrange
+        UUID incidentId = UUID.randomUUID();
+        IncidentResolveDto resolveDto = new IncidentResolveDto("RETRY");
+
+        // Act & Assert — admin can resolve, returns 404 because no actual incident exists (expected)
+        mockMvc.perform(put("/api/v1/incidents/{id}/resolve", incidentId)
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_PROCESS_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(resolveDto)))
                 .andExpect(status().isNotFound());

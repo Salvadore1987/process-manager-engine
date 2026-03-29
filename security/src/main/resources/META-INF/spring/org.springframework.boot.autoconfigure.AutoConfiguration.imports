@@ -1,0 +1,3 @@
+uz.salvadore.processengine.security.autoconfigure.SecurityAutoConfiguration
+uz.salvadore.processengine.security.autoconfigure.KeycloakJwtAutoConfiguration
+uz.salvadore.processengine.security.autoconfigure.SecurityWebAutoConfiguration

@@ -1,0 +1,193 @@
+{
+  "id": "process-engine",
+  "realm": "process-engine",
+  "enabled": true,
+  "registrationAllowed": false,
+  "resetPasswordAllowed": true,
+  "loginWithEmailAllowed": true,
+  "sslRequired": "external",
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "realm": [
+      {
+        "name": "process-admin",
+        "description": "Full access to all process engine operations"
+      },
+      {
+        "name": "process-operator",
+        "description": "Start, stop, suspend, resume instances; send messages; manage variables"
+      },
+      {
+        "name": "process-viewer",
+        "description": "Read-only access to definitions, instances, variables, history"
+      },
+      {
+        "name": "process-deployer",
+        "description": "Deploy and undeploy process definitions (CI/CD service account)"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "process-engine-api",
+      "name": "Process Engine API Client",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "rootUrl": "http://localhost:8080",
+      "baseUrl": "/",
+      "redirectUris": [
+        "http://localhost:8080/*",
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "*"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8080/*##http://localhost:3000/*"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ]
+    },
+    {
+      "clientId": "process-engine-service",
+      "name": "Process Engine Service Client",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "secret": "process-engine-service-secret",
+      "attributes": {
+        "access.token.lifespan": "600"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "admin@process-engine.local",
+      "firstName": "Admin",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "process-admin"
+      ]
+    },
+    {
+      "username": "operator",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "operator@process-engine.local",
+      "firstName": "Operator",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "operator",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "process-operator"
+      ]
+    },
+    {
+      "username": "viewer",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "viewer@process-engine.local",
+      "firstName": "Viewer",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "viewer",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "process-viewer"
+      ]
+    },
+    {
+      "username": "deployer",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "deployer@process-engine.local",
+      "firstName": "Deployer",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "deployer",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "process-deployer"
+      ]
+    },
+    {
+      "username": "service-account-process-engine-service",
+      "enabled": true,
+      "emailVerified": false,
+      "serviceAccountClientId": "process-engine-service",
+      "realmRoles": [
+        "process-operator"
+      ]
+    }
+  ],
+  "scopeMappings": [
+    {
+      "client": "process-engine-service",
+      "roles": [
+        "process-operator"
+      ]
+    }
+  ],
+  "clientScopeMappings": {},
+  "components": {
+    "org.keycloak.keys.KeyProvider": [
+      {
+        "name": "rsa-generated",
+        "providerId": "rsa-generated",
+        "config": {
+          "keySize": [
+            "2048"
+          ],
+          "priority": [
+            "100"
+          ]
+        }
+      }
+    ]
+  }
+}

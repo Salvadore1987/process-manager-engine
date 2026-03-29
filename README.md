@@ -45,6 +45,7 @@ Java 21 движок бизнес-процессов на основе **BPMN 2.
 | `core` | Standalone движок: BPMN-парсер, token engine, event sourcing, port-интерфейсы |
 | `rabbitmq-transport` | Реализация `MessageTransport` и `TimerService` поверх RabbitMQ |
 | `spring-integration` | Spring Boot Starter: auto-configuration, health indicators, метрики |
+| `security` | Spring Security OAuth2 Resource Server + Keycloak JWT интеграция |
 | `rest-api` | Spring Boot MVC приложение с REST API |
 
 ## Технологии
@@ -116,8 +117,66 @@ curl -X POST http://localhost:8080/api/v1/instances \
 | `PROCESS_ENGINE_RETRY_MAX_ATTEMPTS` | `process-engine.retry.max-attempts` | `3` | Макс. кол-во retry |
 | `PROCESS_ENGINE_RETRY_BASE_INTERVAL` | `process-engine.retry.base-interval` | `5s` | Базовый интервал retry |
 | `PROCESS_ENGINE_RETRY_MAX_INTERVAL` | `process-engine.retry.max-interval` | `5m` | Макс. интервал retry |
+| `PROCESS_ENGINE_SECURITY_ENABLED` | `process-engine.security.enabled` | `true` | Включить/выключить авторизацию |
+| `KEYCLOAK_ISSUER_URI` | `process-engine.security.issuer-uri` | `http://localhost:8180/realms/process-engine` | Keycloak realm URI |
+| `KEYCLOAK_ADMIN` | — | `admin` | Keycloak admin username |
+| `KEYCLOAK_ADMIN_PASSWORD` | — | `admin` | Keycloak admin password |
+| `KEYCLOAK_PORT` | — | `8180` | Keycloak HTTP порт |
 
 Файл переменных: `.env/local.env`
+
+## Авторизация (Keycloak)
+
+Движок использует [Keycloak](https://www.keycloak.org/) для аутентификации и авторизации через JWT-токены (OAuth2 Resource Server).
+
+### Роли
+
+| Роль | Описание |
+|------|----------|
+| `process-admin` | Полный доступ ко всем операциям |
+| `process-operator` | Запуск/остановка/suspend/resume экземпляров, отправка сообщений, управление переменными |
+| `process-viewer` | Только чтение: определения, экземпляры, переменные, история |
+| `process-deployer` | Deploy/undeploy определений процессов (CI/CD) |
+
+### Тестовые пользователи (dev/local)
+
+| Username | Password | Роль |
+|----------|----------|------|
+| `admin` | `admin` | `process-admin` |
+| `operator` | `operator` | `process-operator` |
+| `viewer` | `viewer` | `process-viewer` |
+| `deployer` | `deployer` | `process-deployer` |
+
+### Получение JWT-токена
+
+```bash
+# Получить токен
+TOKEN=$(curl -s -X POST http://localhost:8180/realms/process-engine/protocol/openid-connect/token \
+  -d "grant_type=password&client_id=process-engine-api&username=admin&password=admin" | jq -r '.access_token')
+
+# Использовать токен
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/definitions
+```
+
+### Service-to-service (client credentials)
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8180/realms/process-engine/protocol/openid-connect/token \
+  -d "grant_type=client_credentials&client_id=process-engine-service&client_secret=process-engine-service-secret" | jq -r '.access_token')
+```
+
+### Отключение авторизации (для разработки)
+
+```bash
+export PROCESS_ENGINE_SECURITY_ENABLED=false
+```
+
+Или в `.env/local.env`:
+```
+PROCESS_ENGINE_SECURITY_ENABLED=false
+```
+
+При отключённой авторизации все эндпоинты доступны без токена. Actuator-эндпоинты (`/actuator/**`) всегда доступны без авторизации.
 
 ## REST API
 
@@ -492,8 +551,9 @@ Exchange: process-engine.timers (topic, durable)
 | core | 201 |
 | rabbitmq-transport | 49 (22 unit + 27 integration) |
 | spring-integration | 45 |
-| rest-api | 29 |
-| **Итого** | **324** |
+| security | 42 |
+| rest-api | 52 (29 functional + 23 security) |
+| **Итого** | **389** |
 
 ## Развёртывание
 
@@ -503,8 +563,8 @@ Exchange: process-engine.timers (topic, durable)
 # Все сервисы
 docker compose --env-file .env/local.env up -d
 
-# Только RabbitMQ (для локальной разработки)
-docker compose --env-file .env/local.env up -d rabbitmq
+# Только RabbitMQ + Keycloak (для локальной разработки)
+docker compose --env-file .env/local.env up -d rabbitmq keycloak
 
 # Логи
 docker compose logs -f process-engine
