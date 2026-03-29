@@ -17,6 +17,7 @@ import uz.salvadore.processengine.core.port.outgoing.ProcessEventStore;
 import uz.salvadore.processengine.rest.mapper.ProcessDefinitionDtoMapper;
 import uz.salvadore.processengine.rest.mapper.ProcessInstanceDtoMapper;
 import uz.salvadore.processengine.rest.mapper.ProcessEventDtoMapper;
+import uz.salvadore.processengine.rest.config.NoSecurityTestConfig;
 
 import java.time.Instant;
 import java.util.List;
@@ -30,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(HistoryController.class)
-@Import({ProcessDefinitionDtoMapper.class, ProcessInstanceDtoMapper.class, ProcessEventDtoMapper.class})
+@Import({ProcessDefinitionDtoMapper.class, ProcessInstanceDtoMapper.class, ProcessEventDtoMapper.class, NoSecurityTestConfig.class})
 class HistoryControllerTest {
 
     @Autowired

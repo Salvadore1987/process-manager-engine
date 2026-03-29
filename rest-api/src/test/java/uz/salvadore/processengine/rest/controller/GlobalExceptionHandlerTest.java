@@ -15,6 +15,7 @@ import uz.salvadore.processengine.rest.exception.DefinitionNotFoundException;
 import uz.salvadore.processengine.rest.mapper.ProcessDefinitionDtoMapper;
 import uz.salvadore.processengine.rest.mapper.ProcessInstanceDtoMapper;
 import uz.salvadore.processengine.rest.mapper.ProcessEventDtoMapper;
+import uz.salvadore.processengine.rest.config.NoSecurityTestConfig;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -33,7 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Exercises exception handling through actual controller endpoints.
  */
 @WebMvcTest(ProcessInstanceController.class)
-@Import({ProcessDefinitionDtoMapper.class, ProcessInstanceDtoMapper.class, ProcessEventDtoMapper.class})
+@Import({ProcessDefinitionDtoMapper.class, ProcessInstanceDtoMapper.class, ProcessEventDtoMapper.class, NoSecurityTestConfig.class})
 class GlobalExceptionHandlerTest {
 
     @Autowired
