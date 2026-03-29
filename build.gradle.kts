@@ -29,6 +29,11 @@ subprojects {
     }
 
     tasks.test {
-        useJUnitPlatform()
+        useJUnitPlatform {
+            val excludeTags = project.findProperty("excludeTags") as String?
+            if (excludeTags != null) {
+                excludeTags(excludeTags)
+            }
+        }
     }
 }
