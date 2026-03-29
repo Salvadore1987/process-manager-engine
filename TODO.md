@@ -35,70 +35,70 @@
 
 ### 1.1. Enums
 
-- [ ] 1.1.1. Создать `ProcessState` enum — RUNNING, SUSPENDED, COMPLETED, ERROR, TERMINATED
-- [ ] 1.1.2. Создать `TokenState` enum — ACTIVE, WAITING, COMPLETED
-- [ ] 1.1.3. Создать `NodeType` enum — START_EVENT, END_EVENT, SERVICE_TASK, EXCLUSIVE_GATEWAY, PARALLEL_GATEWAY, CALL_ACTIVITY, COMPENSATION_BOUNDARY, TIMER_BOUNDARY, ERROR_BOUNDARY
+- ✅ 1.1.1. Создать `ProcessState` enum — RUNNING, SUSPENDED, COMPLETED, ERROR, TERMINATED
+- ✅ 1.1.2. Создать `TokenState` enum — ACTIVE, WAITING, COMPLETED
+- ✅ 1.1.3. Создать `NodeType` enum — START_EVENT, END_EVENT, SERVICE_TASK, EXCLUSIVE_GATEWAY, PARALLEL_GATEWAY, CALL_ACTIVITY, COMPENSATION_BOUNDARY, TIMER_BOUNDARY, ERROR_BOUNDARY
 
 ### 1.2. Утилиты
 
-- [ ] 1.2.1. Реализовать `UUIDv7` — генерация UUID version 7 (timestamp + random)
-- [ ] 1.2.2. Написать `UUIDv7Test` — version=7, time-ordered, unique
+- ✅ 1.2.1. Реализовать `UUIDv7` — генерация UUID version 7 (timestamp + random)
+- ✅ 1.2.2. Написать `UUIDv7Test` — version=7, time-ordered, unique
 
 ### 1.3. FlowNode (sealed interface) и наследники
 
-- [ ] 1.3.1. Создать sealed interface `FlowNode` (id, name, type, incomingFlows, outgoingFlows)
-- [ ] 1.3.2. Реализовать `StartEvent` record implements FlowNode
-- [ ] 1.3.3. Реализовать `EndEvent` record (+ errorCode для error end event)
-- [ ] 1.3.4. Реализовать `ServiceTask` record (+ topic, retryCount, retryInterval)
-- [ ] 1.3.5. Реализовать `ExclusiveGateway` record
-- [ ] 1.3.6. Реализовать `ParallelGateway` record
-- [ ] 1.3.7. Реализовать `CallActivity` record (+ calledElement)
-- [ ] 1.3.8. Реализовать `CompensationBoundaryEvent` record (+ attachedToRef)
-- [ ] 1.3.9. Реализовать `TimerBoundaryEvent` record (+ attachedToRef, duration, cancelActivity)
-- [ ] 1.3.10. Реализовать `ErrorBoundaryEvent` record (+ attachedToRef, errorCode, cancelActivity)
+- ✅ 1.3.1. Создать sealed interface `FlowNode` (id, name, type, incomingFlows, outgoingFlows)
+- ✅ 1.3.2. Реализовать `StartEvent` record implements FlowNode
+- ✅ 1.3.3. Реализовать `EndEvent` record (+ errorCode для error end event)
+- ✅ 1.3.4. Реализовать `ServiceTask` record (+ topic, retryCount, retryInterval)
+- ✅ 1.3.5. Реализовать `ExclusiveGateway` record
+- ✅ 1.3.6. Реализовать `ParallelGateway` record
+- ✅ 1.3.7. Реализовать `CallActivity` record (+ calledElement)
+- ✅ 1.3.8. Реализовать `CompensationBoundaryEvent` record (+ attachedToRef)
+- ✅ 1.3.9. Реализовать `TimerBoundaryEvent` record (+ attachedToRef, duration, cancelActivity)
+- ✅ 1.3.10. Реализовать `ErrorBoundaryEvent` record (+ attachedToRef, errorCode, cancelActivity)
 
 ### 1.4. SequenceFlow и ConditionExpression
 
-- [ ] 1.4.1. Создать `SequenceFlow` record (id, sourceRef, targetRef, conditionExpression)
-- [ ] 1.4.2. Создать `ConditionExpression` record (expression string)
+- ✅ 1.4.1. Создать `SequenceFlow` record (id, sourceRef, targetRef, conditionExpression)
+- ✅ 1.4.2. Создать `ConditionExpression` record (expression string)
 
 ### 1.5. Aggregate Roots
 
-- [ ] 1.5.1. Реализовать `Token` (id UUIDv7, currentNodeId, state) с методами state transition
-- [ ] 1.5.2. Реализовать `ProcessDefinition` (id, key, version, name, bpmnXml, flowNodes, sequenceFlows, deployedAt) — factory method, валидация (1 start event, >=1 end event)
-- [ ] 1.5.3. Реализовать `ProcessInstance` (id, definitionId, parentProcessInstanceId, state, tokens, variables, startedAt, completedAt) — factory method, lifecycle methods (suspend, resume, complete, error, terminate)
+- ✅ 1.5.1. Реализовать `Token` (id UUIDv7, currentNodeId, state) с методами state transition
+- ✅ 1.5.2. Реализовать `ProcessDefinition` (id, key, version, name, bpmnXml, flowNodes, sequenceFlows, deployedAt) — factory method, валидация (1 start event, >=1 end event)
+- ✅ 1.5.3. Реализовать `ProcessInstance` (id, definitionId, parentProcessInstanceId, state, tokens, variables, startedAt, completedAt) — factory method, lifecycle methods (suspend, resume, complete, error, terminate)
 
 ### 1.6. Domain Events (sealed interface + records)
 
-- [ ] 1.6.1. Создать sealed interface `ProcessEvent` (id, processInstanceId, type, payload, occurredAt, sequenceNumber)
-- [ ] 1.6.2. Реализовать `ProcessStartedEvent` record
-- [ ] 1.6.3. Реализовать `TokenMovedEvent` record
-- [ ] 1.6.4. Реализовать `TaskCompletedEvent` record
-- [ ] 1.6.5. Реализовать `ProcessSuspendedEvent` record
-- [ ] 1.6.6. Реализовать `ProcessResumedEvent` record
-- [ ] 1.6.7. Реализовать `ProcessCompletedEvent` record
-- [ ] 1.6.8. Реализовать `ProcessErrorEvent` record
-- [ ] 1.6.9. Реализовать `TimerScheduledEvent` record
-- [ ] 1.6.10. Реализовать `TimerFiredEvent` record
-- [ ] 1.6.11. Реализовать `CompensationTriggeredEvent` record
-- [ ] 1.6.12. Реализовать `CallActivityStartedEvent` record
-- [ ] 1.6.13. Реализовать `CallActivityCompletedEvent` record
+- ✅ 1.6.1. Создать sealed interface `ProcessEvent` (id, processInstanceId, type, payload, occurredAt, sequenceNumber)
+- ✅ 1.6.2. Реализовать `ProcessStartedEvent` record
+- ✅ 1.6.3. Реализовать `TokenMovedEvent` record
+- ✅ 1.6.4. Реализовать `TaskCompletedEvent` record
+- ✅ 1.6.5. Реализовать `ProcessSuspendedEvent` record
+- ✅ 1.6.6. Реализовать `ProcessResumedEvent` record
+- ✅ 1.6.7. Реализовать `ProcessCompletedEvent` record
+- ✅ 1.6.8. Реализовать `ProcessErrorEvent` record
+- ✅ 1.6.9. Реализовать `TimerScheduledEvent` record
+- ✅ 1.6.10. Реализовать `TimerFiredEvent` record
+- ✅ 1.6.11. Реализовать `CompensationTriggeredEvent` record
+- ✅ 1.6.12. Реализовать `CallActivityStartedEvent` record
+- ✅ 1.6.13. Реализовать `CallActivityCompletedEvent` record
 
 ### 1.7. Port Interfaces
 
-- [ ] 1.7.1. Создать `ProcessEventStore` interface (append, getEvents by processInstanceId)
-- [ ] 1.7.2. Создать `MessageTransport` interface (send, subscribe)
-- [ ] 1.7.3. Создать `TimerService` interface (schedule, cancel)
-- [ ] 1.7.4. Создать `ActivityHandler` interface (handle)
+- ✅ 1.7.1. Создать `ProcessEventStore` interface (append, getEvents by processInstanceId)
+- ✅ 1.7.2. Создать `MessageTransport` interface (send, subscribe)
+- ✅ 1.7.3. Создать `TimerService` interface (schedule, cancel)
+- ✅ 1.7.4. Создать `ActivityHandler` interface (handle)
 
 ### 1.8. Тесты Phase 1
 
-- [ ] 1.8.1. `TokenTest` — state transitions (ACTIVE→WAITING→COMPLETED), invalid transitions throw
-- [ ] 1.8.2. `ProcessDefinitionTest` — factory creation, validation (must have start/end events)
-- [ ] 1.8.3. `ProcessInstanceTest` — state transitions, suspend/resume/complete/error/terminate
-- [ ] 1.8.4. `FlowNodeTest` — sealed permits only known types, ServiceTask carries topic
-- [ ] 1.8.5. `ProcessEventTest` — each event record creates correctly, sequenceNumber ordering
-- [ ] 1.8.6. Проверить: `./gradlew :core:test` проходит
+- ✅ 1.8.1. `TokenTest` — state transitions (ACTIVE→WAITING→COMPLETED), invalid transitions throw
+- ✅ 1.8.2. `ProcessDefinitionTest` — factory creation, validation (must have start/end events)
+- ✅ 1.8.3. `ProcessInstanceTest` — state transitions, suspend/resume/complete/error/terminate
+- ✅ 1.8.4. `FlowNodeTest` — sealed permits only known types, ServiceTask carries topic
+- ✅ 1.8.5. `ProcessEventTest` — each event record creates correctly, sequenceNumber ordering
+- ✅ 1.8.6. Проверить: `./gradlew :core:test` проходит
 
 ---
 
