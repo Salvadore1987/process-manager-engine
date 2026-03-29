@@ -341,88 +341,88 @@
 
 ### 7.1. DTOs (records)
 
-- [ ] 7.1.1. Создать `ProcessDefinitionDto` record
-- [ ] 7.1.2. Создать `ProcessInstanceDto` record
-- [ ] 7.1.3. Создать `StartProcessRequestDto` record (definitionKey, variables)
-- [ ] 7.1.4. Создать `ValidationResultDto` record (valid, unsupportedElements, supportedElements)
-- [ ] 7.1.5. Создать `UnsupportedElementDto` record (element, id, name, line)
-- [ ] 7.1.6. Создать `ProcessEventDto` record
-- [ ] 7.1.7. Создать `ActivityHistoryDto` record
-- [ ] 7.1.8. Создать `IncidentDto` record
-- [ ] 7.1.9. Создать `IncidentResolveDto` record (action: RETRY|SKIP|CANCEL)
-- [ ] 7.1.10. Создать `ErrorResponseDto` record (error, message, timestamp, path)
-- [ ] 7.1.11. Создать `PageDto<T>` generic wrapper
+- ✅ 7.1.1. Создать `ProcessDefinitionDto` record
+- ✅ 7.1.2. Создать `ProcessInstanceDto` record
+- ✅ 7.1.3. Создать `StartProcessRequestDto` record (definitionKey, variables)
+- ✅ 7.1.4. Создать `ValidationResultDto` record (valid, unsupportedElements, supportedElements)
+- ✅ 7.1.5. Создать `UnsupportedElementDto` record (element, id, name, line)
+- ✅ 7.1.6. Создать `ProcessEventDto` record
+- ✅ 7.1.7. Создать `ActivityHistoryDto` record
+- ✅ 7.1.8. Создать `IncidentDto` record
+- ✅ 7.1.9. Создать `IncidentResolveDto` record (action: RETRY|SKIP|CANCEL)
+- ✅ 7.1.10. Создать `ErrorResponseDto` record (error, message, timestamp, path)
+- ✅ 7.1.11. Создать `PageDto<T>` generic wrapper
 
 ### 7.2. Mappers
 
-- [ ] 7.2.1. Реализовать `ProcessDefinitionDtoMapper`
-- [ ] 7.2.2. Реализовать `ProcessInstanceDtoMapper`
-- [ ] 7.2.3. Реализовать `ProcessEventDtoMapper`
+- ✅ 7.2.1. Реализовать `ProcessDefinitionDtoMapper`
+- ✅ 7.2.2. Реализовать `ProcessInstanceDtoMapper`
+- ✅ 7.2.3. Реализовать `ProcessEventDtoMapper`
 
 ### 7.3. Exception Handling
 
-- [ ] 7.3.1. Создать `ProcessNotFoundException`
-- [ ] 7.3.2. Создать `DefinitionNotFoundException`
-- [ ] 7.3.3. Создать `ValidationFailedException` (carries BpmnValidationResult)
-- [ ] 7.3.4. Реализовать `GlobalExceptionHandler` (@ControllerAdvice) — стандартный ErrorResponseDto формат
+- ✅ 7.3.1. Создать `ProcessNotFoundException`
+- ✅ 7.3.2. Создать `DefinitionNotFoundException`
+- ✅ 7.3.3. Создать `ValidationFailedException` (carries BpmnValidationResult)
+- ✅ 7.3.4. Реализовать `GlobalExceptionHandler` (@ControllerAdvice) — стандартный ErrorResponseDto формат
 
 ### 7.4. Controllers
 
-- [ ] 7.4.1. Реализовать `ProcessDefinitionController`:
+- ✅ 7.4.1. Реализовать `ProcessDefinitionController`:
   - POST `/api/v1/definitions` — multipart upload → parse → validate → deploy
   - POST `/api/v1/definitions/validate` — multipart → parse → validate (без deploy)
   - GET `/api/v1/definitions` — list all
   - GET `/api/v1/definitions/{key}` — get latest version
   - GET `/api/v1/definitions/{key}/versions` — list versions
   - DELETE `/api/v1/definitions/{key}` — undeploy
-- [ ] 7.4.2. Реализовать `ProcessInstanceController`:
+- ✅ 7.4.2. Реализовать `ProcessInstanceController`:
   - POST `/api/v1/instances` — start new instance
   - GET `/api/v1/instances` — list (paginated)
   - GET `/api/v1/instances/{id}` — get details
   - PUT `/api/v1/instances/{id}/suspend`
   - PUT `/api/v1/instances/{id}/resume`
   - DELETE `/api/v1/instances/{id}` — terminate
-- [ ] 7.4.3. Реализовать `VariableController`:
+- ✅ 7.4.3. Реализовать `VariableController`:
   - GET `/api/v1/instances/{id}/variables`
   - PUT `/api/v1/instances/{id}/variables`
   - GET `/api/v1/instances/{id}/variables/{name}`
-- [ ] 7.4.4. Реализовать `MessageController`:
+- ✅ 7.4.4. Реализовать `MessageController`:
   - POST `/api/v1/messages` — send message/signal
-- [ ] 7.4.5. Реализовать `HistoryController`:
+- ✅ 7.4.5. Реализовать `HistoryController`:
   - GET `/api/v1/history/instances` — query completed
   - GET `/api/v1/history/instances/{id}/events` — event log
   - GET `/api/v1/history/instances/{id}/activities` — activity history
-- [ ] 7.4.6. Реализовать `IncidentController`:
+- ✅ 7.4.6. Реализовать `IncidentController`:
   - GET `/api/v1/incidents` — list
   - GET `/api/v1/incidents/{id}` — details
   - PUT `/api/v1/incidents/{id}/resolve`
 
 ### 7.5. Configuration
 
-- [ ] 7.5.1. Создать `WebConfig` — Jackson ObjectMapper config
-- [ ] 7.5.2. Настроить `application.yml` — `spring.threads.virtual.enabled=true`, server port, process-engine properties
+- ✅ 7.5.1. Создать `WebConfig` — Jackson ObjectMapper config
+- ✅ 7.5.2. Настроить `application.yml` — `spring.threads.virtual.enabled=true`, server port, process-engine properties
 
 ### 7.6. Тесты Phase 7
 
-- [ ] 7.6.1. `ProcessDefinitionControllerTest` (MockMvc) — POST deploy valid BPMN → 201
-- [ ] 7.6.2. `ProcessDefinitionControllerTest` (MockMvc) — POST deploy invalid BPMN → 400 с unsupported elements
-- [ ] 7.6.3. `ProcessDefinitionControllerTest` (MockMvc) — POST validate → ValidationResultDto
-- [ ] 7.6.4. `ProcessDefinitionControllerTest` (MockMvc) — GET list, GET by key, DELETE
-- [ ] 7.6.5. `ProcessInstanceControllerTest` (MockMvc) — POST start → 201
-- [ ] 7.6.6. `ProcessInstanceControllerTest` (MockMvc) — GET by id, PUT suspend/resume, DELETE terminate
-- [ ] 7.6.7. `VariableControllerTest` (MockMvc) — GET/PUT variables
-- [ ] 7.6.8. `MessageControllerTest` (MockMvc) — POST message → 202
-- [ ] 7.6.9. `HistoryControllerTest` (MockMvc) — GET events/activities
-- [ ] 7.6.10. `IncidentControllerTest` (MockMvc) — GET list, GET by id, PUT resolve
-- [ ] 7.6.11. `GlobalExceptionHandlerTest` — verify error response format matches spec
-- [ ] 7.6.12. `RestApiE2ETest` (Testcontainers) — deploy BPMN → start instance → complete tasks → verify completion via REST
-- [ ] 7.6.13. Проверить: `./gradlew :rest-api:test` проходит
+- ✅ 7.6.1. `ProcessDefinitionControllerTest` (MockMvc) — POST deploy valid BPMN → 201
+- ✅ 7.6.2. `ProcessDefinitionControllerTest` (MockMvc) — POST deploy invalid BPMN → 400 с unsupported elements
+- ✅ 7.6.3. `ProcessDefinitionControllerTest` (MockMvc) — POST validate → ValidationResultDto
+- ✅ 7.6.4. `ProcessDefinitionControllerTest` (MockMvc) — GET list, GET by key, DELETE
+- ✅ 7.6.5. `ProcessInstanceControllerTest` (MockMvc) — POST start → 201
+- ✅ 7.6.6. `ProcessInstanceControllerTest` (MockMvc) — GET by id, PUT suspend/resume, DELETE terminate
+- ✅ 7.6.7. `VariableControllerTest` (MockMvc) — GET/PUT variables
+- ✅ 7.6.8. `MessageControllerTest` (MockMvc) — POST message → 202
+- ✅ 7.6.9. `HistoryControllerTest` (MockMvc) — GET events/activities
+- ✅ 7.6.10. `IncidentControllerTest` (MockMvc) — GET list, GET by id, PUT resolve
+- ✅ 7.6.11. `GlobalExceptionHandlerTest` — verify error response format matches spec
+- ✅ 7.6.12. `RestApiE2ETest` (Testcontainers) — deploy BPMN → start instance → complete tasks → verify completion via REST
+- ✅ 7.6.13. Проверить: `./gradlew :rest-api:test` проходит
 
 ---
 
 ## Final Verification
 
-- [ ] `./gradlew build` — все модули компилируются
-- [ ] `./gradlew test` — все ~89 тестов проходят
-- [ ] Парсинг обоих референсных BPMN (order + payment) корректен
-- [ ] E2E: deploy → start → complete → verify через REST API с реальным RabbitMQ
+- ✅ `./gradlew build` — все модули компилируются
+- ✅ `./gradlew test` — все ~297 тестов проходят (201 core + 22 rabbitmq + 45 spring + 29 rest-api)
+- ✅ Парсинг обоих референсных BPMN (order + payment) корректен
+- ✅ E2E: deploy → start → complete → verify через REST API с реальным RabbitMQ
