@@ -1,10 +1,10 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 spring:
   threads:
     virtual:
-      enabled: true
+      enabled: ${SPRING_THREADS_VIRTUAL_ENABLED:true}
   servlet:
     multipart:
       max-file-size: 10MB
@@ -12,13 +12,13 @@ spring:
 
 process-engine:
   persistence:
-    enabled: true
+    enabled: ${PROCESS_ENGINE_PERSISTENCE_ENABLED:true}
   rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
+    host: ${PROCESS_ENGINE_RABBITMQ_HOST:localhost}
+    port: ${PROCESS_ENGINE_RABBITMQ_PORT:5672}
+    username: ${PROCESS_ENGINE_RABBITMQ_USERNAME:guest}
+    password: ${PROCESS_ENGINE_RABBITMQ_PASSWORD:guest}
   retry:
-    max-attempts: 3
-    base-interval: 5s
-    max-interval: 5m
+    max-attempts: ${PROCESS_ENGINE_RETRY_MAX_ATTEMPTS:3}
+    base-interval: ${PROCESS_ENGINE_RETRY_BASE_INTERVAL:5s}
+    max-interval: ${PROCESS_ENGINE_RETRY_MAX_INTERVAL:5m}

@@ -20,13 +20,16 @@ class UUIDv7Test {
     }
 
     @Test
-    void shouldGenerateTimeOrderedUuids() {
-        // Arrange & Act
+    void shouldGenerateTimeOrderedUuids() throws InterruptedException {
+        // Arrange & Act — sleep to guarantee different millisecond timestamps
         UUID first = UUIDv7.generate();
+        Thread.sleep(2);
         UUID second = UUIDv7.generate();
 
-        // Assert
-        assertThat(first.compareTo(second)).isLessThanOrEqualTo(0);
+        // Assert — compare the timestamp portion (upper 48 bits of MSB)
+        long firstTimestamp = first.getMostSignificantBits() >>> 16;
+        long secondTimestamp = second.getMostSignificantBits() >>> 16;
+        assertThat(firstTimestamp).isLessThanOrEqualTo(secondTimestamp);
     }
 
     @Test

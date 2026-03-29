@@ -1,0 +1,35 @@
+services:
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: process-engine-rabbitmq
+    env_file:
+      - .env/local.env
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  process-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: process-engine-app
+    env_file:
+      - .env/local.env
+    environment:
+      PROCESS_ENGINE_RABBITMQ_HOST: rabbitmq
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  rabbitmq-data:
