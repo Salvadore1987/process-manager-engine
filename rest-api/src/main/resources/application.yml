@@ -9,6 +9,11 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/process-engine}
 
 process-engine:
   persistence:
@@ -22,3 +27,6 @@ process-engine:
     max-attempts: ${PROCESS_ENGINE_RETRY_MAX_ATTEMPTS:3}
     base-interval: ${PROCESS_ENGINE_RETRY_BASE_INTERVAL:5s}
     max-interval: ${PROCESS_ENGINE_RETRY_MAX_INTERVAL:5m}
+  security:
+    enabled: ${PROCESS_ENGINE_SECURITY_ENABLED:true}
+    issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/process-engine}

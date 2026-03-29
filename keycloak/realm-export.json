@@ -154,6 +154,15 @@
       "realmRoles": [
         "process-deployer"
       ]
+    },
+    {
+      "username": "service-account-process-engine-service",
+      "enabled": true,
+      "emailVerified": false,
+      "serviceAccountClientId": "process-engine-service",
+      "realmRoles": [
+        "process-operator"
+      ]
     }
   ],
   "scopeMappings": [
