@@ -1,0 +1,18 @@
+process-engine:
+  persistence:
+    enabled: true
+  rabbitmq:
+    host: custom-rabbit
+    port: 5673
+    username: admin
+    password: secret
+    virtual-host: /test
+    exchanges:
+      tasks: custom.tasks
+      retry: custom.retry
+      dlq: custom.dlq
+      timers: custom.timers
+  retry:
+    max-attempts: 5
+    base-interval: 10s
+    max-interval: 10m

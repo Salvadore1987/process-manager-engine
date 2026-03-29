@@ -305,7 +305,7 @@
 
 ### 6.1. Properties
 
-- [ ] 6.1.1. Создать `ProcessEngineProperties` (@ConfigurationProperties):
+- ✅ 6.1.1. Создать `ProcessEngineProperties` (@ConfigurationProperties):
   - `process-engine.persistence.enabled` (boolean, default false)
   - `process-engine.rabbitmq.host/port/username/password`
   - `process-engine.rabbitmq.exchanges.tasks/retry/dlq/timers`
@@ -313,27 +313,27 @@
 
 ### 6.2. Auto-Configuration
 
-- [ ] 6.2.1. Реализовать `ProcessEngineAutoConfiguration` — создание ProcessEngine bean, ProcessDefinitionRepository bean
-- [ ] 6.2.2. Реализовать `RabbitMqTransportAutoConfiguration` — @ConditionalOnClass(ConnectionFactory), создание RabbitMq* beans
-- [ ] 6.2.3. Реализовать `EventStoreAutoConfiguration`:
+- ✅ 6.2.1. Реализовать `ProcessEngineAutoConfiguration` — создание ProcessEngine bean, ProcessDefinitionRepository bean
+- ✅ 6.2.2. Реализовать `RabbitMqTransportAutoConfiguration` — @ConditionalOnClass(ConnectionFactory), создание RabbitMq* beans
+- ✅ 6.2.3. Реализовать `EventStoreAutoConfiguration`:
   - @ConditionalOnProperty("process-engine.persistence.enabled", havingValue="true") → placeholder для real store
   - @ConditionalOnMissingBean(ProcessEventStore.class) → NoOpEventStore
-- [ ] 6.2.4. Реализовать `MetricsAutoConfiguration` — Micrometer counters/timers
-- [ ] 6.2.5. Создать `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
+- ✅ 6.2.4. Реализовать `MetricsAutoConfiguration` — Micrometer counters/timers
+- ✅ 6.2.5. Создать `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
 
 ### 6.3. Health & Metrics
 
-- [ ] 6.3.1. Реализовать `ProcessEngineHealthIndicator` — UP when engine running
-- [ ] 6.3.2. Реализовать `RabbitMqTransportHealthIndicator` — UP when RabbitMQ connection alive
-- [ ] 6.3.3. Реализовать `ProcessEngineMetrics` — counters: instances.started/completed/errors, timer: task.duration (tagged by topic)
+- ✅ 6.3.1. Реализовать `ProcessEngineHealthIndicator` — UP when engine running
+- ✅ 6.3.2. Реализовать `RabbitMqTransportHealthIndicator` — UP when RabbitMQ connection alive
+- ✅ 6.3.3. Реализовать `ProcessEngineMetrics` — counters: instances.started/completed/errors, timer: task.duration (tagged by topic)
 
 ### 6.4. Тесты Phase 6
 
-- [ ] 6.4.1. `ProcessEngineAutoConfigurationTest` — verify beans created with defaults
-- [ ] 6.4.2. `EventStoreAutoConfigurationTest` — NoOpEventStore when persistence disabled
-- [ ] 6.4.3. `ProcessEnginePropertiesTest` — property binding from application.yml
-- [ ] 6.4.4. `ProcessEngineHealthIndicatorTest` — UP/DOWN states
-- [ ] 6.4.5. Проверить: `./gradlew :spring-integration:test` проходит
+- ✅ 6.4.1. `ProcessEngineAutoConfigurationTest` — verify beans created with defaults
+- ✅ 6.4.2. `EventStoreAutoConfigurationTest` — NoOpEventStore when persistence disabled
+- ✅ 6.4.3. `ProcessEnginePropertiesTest` — property binding from application.yml
+- ✅ 6.4.4. `ProcessEngineHealthIndicatorTest` — UP/DOWN states
+- ✅ 6.4.5. Проверить: `./gradlew :spring-integration:test` проходит
 
 ---
 

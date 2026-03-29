@@ -1,0 +1,4 @@
+uz.salvadore.processengine.spring.autoconfigure.EventStoreAutoConfiguration
+uz.salvadore.processengine.spring.autoconfigure.RabbitMqTransportAutoConfiguration
+uz.salvadore.processengine.spring.autoconfigure.ProcessEngineAutoConfiguration
+uz.salvadore.processengine.spring.autoconfigure.MetricsAutoConfiguration
