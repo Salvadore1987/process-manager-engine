@@ -1,0 +1,392 @@
+### ============================================================
+### Process Manager Engine — HTTP Client Tests
+### ============================================================
+### Requires IntelliJ IDEA HTTP Client or VS Code REST Client
+### Base URL: http://localhost:8080
+### Keycloak: http://localhost:8180
+### ============================================================
+
+### --- Variables ---
+
+@baseUrl = http://localhost:8080/api/v1
+@keycloakUrl = http://localhost:8180/realms/process-engine/protocol/openid-connect/token
+@clientId = process-engine-api
+@bpmnFile = ../core/src/test/resources/bpmn/example-order-process.bpmn
+
+
+### ============================================================
+### 1. AUTHENTICATION
+### ============================================================
+
+### Get token — admin (process-admin)
+# @name authAdmin
+POST {{keycloakUrl}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id={{clientId}}&username=admin&password=admin
+
+> {%
+    client.global.set("admin_token", response.body.access_token);
+%}
+
+###
+
+### Get token — operator (process-operator)
+# @name authOperator
+POST {{keycloakUrl}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id={{clientId}}&username=operator&password=operator
+
+> {%
+    client.global.set("operator_token", response.body.access_token);
+%}
+
+###
+
+### Get token — viewer (process-viewer)
+# @name authViewer
+POST {{keycloakUrl}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id={{clientId}}&username=viewer&password=viewer
+
+> {%
+    client.global.set("viewer_token", response.body.access_token);
+%}
+
+###
+
+### Get token — deployer (process-deployer)
+# @name authDeployer
+POST {{keycloakUrl}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id={{clientId}}&username=deployer&password=deployer
+
+> {%
+    client.global.set("deployer_token", response.body.access_token);
+%}
+
+###
+
+### Get token — service-to-service (client credentials)
+# @name authService
+POST {{keycloakUrl}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id=process-engine-service&client_secret=process-engine-service-secret
+
+> {%
+    client.global.set("service_token", response.body.access_token);
+%}
+
+
+### ============================================================
+### 2. PROCESS DEFINITIONS
+### ============================================================
+
+### Deploy BPMN process definition
+# @name deployDefinition
+POST {{baseUrl}}/definitions
+Authorization: Bearer {{admin_token}}
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="example-order-process.bpmn"
+Content-Type: application/xml
+
+< {{bpmnFile}}
+--boundary--
+
+> {%
+    client.global.set("definition_id", response.body.id);
+    client.global.set("definition_key", response.body.key);
+%}
+
+###
+
+### Validate BPMN (without deploying)
+POST {{baseUrl}}/definitions/validate
+Authorization: Bearer {{admin_token}}
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="example-order-process.bpmn"
+Content-Type: application/xml
+
+< {{bpmnFile}}
+--boundary--
+
+###
+
+### List all definitions
+GET {{baseUrl}}/definitions
+Authorization: Bearer {{admin_token}}
+
+###
+
+### Get definition by key (latest version)
+GET {{baseUrl}}/definitions/order-processing
+Authorization: Bearer {{admin_token}}
+
+###
+
+### Get all versions of a definition
+GET {{baseUrl}}/definitions/order-processing/versions
+Authorization: Bearer {{admin_token}}
+
+###
+
+### Undeploy definition
+//DELETE {{baseUrl}}/definitions/order-processing
+//Authorization: Bearer {{admin_token}}
+
+
+### ============================================================
+### 3. PROCESS INSTANCES
+### ============================================================
+
+### Start process instance (standard flow, amount <= 10000)
+# @name startInstanceStandard
+POST {{baseUrl}}/instances
+Authorization: Bearer {{admin_token}}
+Content-Type: application/json
+
+{
+  "definitionKey": "order-processing",
+  "variables": {
+    "orderAmount": 5000,
+    "customerId": "cust-001",
+    "customerName": "John Doe"
+  }
+}
+
+> {%
+    client.global.set("instance_id", response.body.id);
+%}
+
+###
+
+### Start process instance (high-value flow, amount > 10000 triggers fraud check)
+# @name startInstanceHighValue
+POST {{baseUrl}}/instances
+Authorization: Bearer {{admin_token}}
+Content-Type: application/json
+
+{
+  "definitionKey": "order-processing",
+  "variables": {
+    "orderAmount": 25000,
+    "customerId": "cust-002",
+    "customerName": "Jane Smith"
+  }
+}
+
+> {%
+    client.global.set("instance_high_id", response.body.id);
+%}
+
+###
+
+### Get process instance by ID
+GET {{baseUrl}}/instances/{{instance_id}}
+Authorization: Bearer {{admin_token}}
+
+###
+
+### Suspend process instance
+PUT {{baseUrl}}/instances/{{instance_id}}/suspend
+Authorization: Bearer {{admin_token}}
+
+###
+
+### Resume process instance
+PUT {{baseUrl}}/instances/{{instance_id}}/resume
+Authorization: Bearer {{admin_token}}
+
+###
+
+### Terminate process instance
+//DELETE {{baseUrl}}/instances/{{instance_id}}
+//Authorization: Bearer {{admin_token}}
+
+
+### ============================================================
+### 4. VARIABLES
+### ============================================================
+
+### Get all variables
+GET {{baseUrl}}/instances/{{instance_id}}/variables
+Authorization: Bearer {{admin_token}}
+
+###
+
+### Get single variable
+GET {{baseUrl}}/instances/{{instance_id}}/variables/orderAmount
+Authorization: Bearer {{admin_token}}
+
+###
+
+### Update variables
+PUT {{baseUrl}}/instances/{{instance_id}}/variables
+Authorization: Bearer {{admin_token}}
+Content-Type: application/json
+
+{
+  "priority": "high",
+  "notes": "VIP customer"
+}
+
+
+### ============================================================
+### 5. MESSAGES (manual task completion)
+### ============================================================
+
+### Send message (complete a waiting task)
+### Replace correlationId with actual token UUID from instance details
+POST {{baseUrl}}/messages
+Authorization: Bearer {{admin_token}}
+Content-Type: application/json
+
+{
+  "correlationId": "REPLACE_WITH_TOKEN_UUID",
+  "payload": {
+    "approved": true,
+    "validatedAt": "2026-03-29T12:00:00Z"
+  }
+}
+
+
+### ============================================================
+### 6. HISTORY
+### ============================================================
+
+### Get event log for instance
+GET {{baseUrl}}/history/instances/{{instance_id}}/events
+Authorization: Bearer {{admin_token}}
+
+###
+
+### Get activity history for instance
+GET {{baseUrl}}/history/instances/{{instance_id}}/activities
+Authorization: Bearer {{admin_token}}
+
+
+### ============================================================
+### 7. INCIDENTS
+### ============================================================
+
+### List all incidents
+GET {{baseUrl}}/incidents
+Authorization: Bearer {{admin_token}}
+
+###
+
+### Get incident by ID (replace with actual incident ID)
+//GET {{baseUrl}}/incidents/REPLACE_WITH_INCIDENT_ID
+//Authorization: Bearer {{admin_token}}
+
+###
+
+### Resolve incident — RETRY
+//PUT {{baseUrl}}/incidents/REPLACE_WITH_INCIDENT_ID/resolve
+//Authorization: Bearer {{admin_token}}
+//Content-Type: application/json
+//
+//{
+//  "action": "RETRY"
+//}
+
+###
+
+### Resolve incident — SKIP
+//PUT {{baseUrl}}/incidents/REPLACE_WITH_INCIDENT_ID/resolve
+//Authorization: Bearer {{admin_token}}
+//Content-Type: application/json
+//
+//{
+//  "action": "SKIP"
+//}
+
+###
+
+### Resolve incident — CANCEL
+//PUT {{baseUrl}}/incidents/REPLACE_WITH_INCIDENT_ID/resolve
+//Authorization: Bearer {{admin_token}}
+//Content-Type: application/json
+//
+//{
+//  "action": "CANCEL"
+//}
+
+
+### ============================================================
+### 8. ACTUATOR (public, no auth required)
+### ============================================================
+
+### Health check
+GET http://localhost:8080/actuator/health
+
+###
+
+### Prometheus metrics
+GET http://localhost:8080/actuator/prometheus
+
+
+### ============================================================
+### 9. ROLE-BASED ACCESS TESTS
+### ============================================================
+
+### Deployer can deploy
+POST {{baseUrl}}/definitions/validate
+Authorization: Bearer {{deployer_token}}
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="example-order-process.bpmn"
+Content-Type: application/xml
+
+< {{bpmnFile}}
+--boundary--
+
+###
+
+### Viewer can read definitions
+GET {{baseUrl}}/definitions
+Authorization: Bearer {{viewer_token}}
+
+###
+
+### Viewer CANNOT start instances (expect 403)
+POST {{baseUrl}}/instances
+Authorization: Bearer {{viewer_token}}
+Content-Type: application/json
+
+{
+  "definitionKey": "order-processing",
+  "variables": {"orderAmount": 100}
+}
+
+###
+
+### Operator can start instances
+POST {{baseUrl}}/instances
+Authorization: Bearer {{operator_token}}
+Content-Type: application/json
+
+{
+  "definitionKey": "order-processing",
+  "variables": {"orderAmount": 100, "customerId": "cust-test"}
+}
+
+###
+
+### Viewer can read history
+GET {{baseUrl}}/history/instances/{{instance_id}}/events
+Authorization: Bearer {{viewer_token}}
+
+###
+
+### No token — expect 401
+GET {{baseUrl}}/definitions
