@@ -161,30 +161,30 @@
 
 ### 3.1. Event Sourcing Core
 
-- [ ] 3.1.1. Реализовать `EventSequencer` — assigns monotonic sequenceNumber per processInstanceId
-- [ ] 3.1.2. Реализовать `EventApplier` — pattern matching switch по sealed ProcessEvent, мутирует builder → иммутабельный ProcessInstance
-- [ ] 3.1.3. Реализовать `ProcessInstanceProjection` — fold List<ProcessEvent> через EventApplier → ProcessInstance
+- ✅ 3.1.1. Реализовать `EventSequencer` — assigns monotonic sequenceNumber per processInstanceId
+- ✅ 3.1.2. Реализовать `EventApplier` — pattern matching switch по sealed ProcessEvent, мутирует builder → иммутабельный ProcessInstance
+- ✅ 3.1.3. Реализовать `ProcessInstanceProjection` — fold List<ProcessEvent> через EventApplier → ProcessInstance
 
 ### 3.2. Event Store Adapters
 
-- [ ] 3.2.1. Реализовать `NoOpEventStore` — append = no-op, getEvents = empty list
-- [ ] 3.2.2. Реализовать `InMemoryEventStore` — ConcurrentHashMap<UUID, CopyOnWriteArrayList<ProcessEvent>>
+- ✅ 3.2.1. Реализовать `NoOpEventStore` — append = no-op, getEvents = empty list
+- ✅ 3.2.2. Реализовать `InMemoryEventStore` — ConcurrentHashMap<UUID, CopyOnWriteArrayList<ProcessEvent>>
 
 ### 3.3. Тесты Phase 3
 
-- [ ] 3.3.1. `EventApplierTest` — ProcessStartedEvent → state=RUNNING, tokens created
-- [ ] 3.3.2. `EventApplierTest` — TokenMovedEvent → token.currentNodeId updated
-- [ ] 3.3.3. `EventApplierTest` — TaskCompletedEvent → token advances
-- [ ] 3.3.4. `EventApplierTest` — ProcessSuspendedEvent → state=SUSPENDED
-- [ ] 3.3.5. `EventApplierTest` — ProcessResumedEvent → state=RUNNING
-- [ ] 3.3.6. `EventApplierTest` — ProcessCompletedEvent → state=COMPLETED
-- [ ] 3.3.7. `EventApplierTest` — ProcessErrorEvent → state=ERROR
-- [ ] 3.3.8. `EventApplierTest` — CallActivityStarted/CompletedEvent
-- [ ] 3.3.9. `ProcessInstanceProjectionTest` — replay полной последовательности (Start → ServiceTask → End)
-- [ ] 3.3.10. `InMemoryEventStoreTest` — append, getEvents, ordering by sequenceNumber
-- [ ] 3.3.11. `InMemoryEventStoreTest` — concurrent appends (thread safety)
-- [ ] 3.3.12. `NoOpEventStoreTest` — append = no-op, getEvents = empty
-- [ ] 3.3.13. Проверить: `./gradlew :core:test` проходит
+- ✅ 3.3.1. `EventApplierTest` — ProcessStartedEvent → state=RUNNING, tokens created
+- ✅ 3.3.2. `EventApplierTest` — TokenMovedEvent → token.currentNodeId updated
+- ✅ 3.3.3. `EventApplierTest` — TaskCompletedEvent → token advances
+- ✅ 3.3.4. `EventApplierTest` — ProcessSuspendedEvent → state=SUSPENDED
+- ✅ 3.3.5. `EventApplierTest` — ProcessResumedEvent → state=RUNNING
+- ✅ 3.3.6. `EventApplierTest` — ProcessCompletedEvent → state=COMPLETED
+- ✅ 3.3.7. `EventApplierTest` — ProcessErrorEvent → state=ERROR
+- ✅ 3.3.8. `EventApplierTest` — CallActivityStarted/CompletedEvent
+- ✅ 3.3.9. `ProcessInstanceProjectionTest` — replay полной последовательности (Start → ServiceTask → End)
+- ✅ 3.3.10. `InMemoryEventStoreTest` — append, getEvents, ordering by sequenceNumber
+- ✅ 3.3.11. `InMemoryEventStoreTest` — concurrent appends (thread safety)
+- ✅ 3.3.12. `NoOpEventStoreTest` — append = no-op, getEvents = empty
+- ✅ 3.3.13. Проверить: `./gradlew :core:test` проходит
 
 ---
 
