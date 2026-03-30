@@ -70,6 +70,30 @@ class ProcessDefinitionTest {
     }
 
     @Test
+    void shouldCreateNewInstanceWithUpdatedVersion() {
+        // Arrange
+        StartEvent start = new StartEvent("start1", "Start", List.of(), List.of("flow1"));
+        EndEvent end = new EndEvent("end1", "End", List.of("flow1"), List.of(), null);
+        SequenceFlow flow = new SequenceFlow("flow1", "start1", "end1", null);
+        ProcessDefinition original = ProcessDefinition.create(
+                "test-process", 1, "Test Process", "<xml/>",
+                List.of(start, end), List.of(flow));
+
+        // Act
+        ProcessDefinition updated = original.withVersion(5);
+
+        // Assert
+        assertThat(updated.getVersion()).isEqualTo(5);
+        assertThat(updated.getId()).isEqualTo(original.getId());
+        assertThat(updated.getKey()).isEqualTo(original.getKey());
+        assertThat(updated.getName()).isEqualTo(original.getName());
+        assertThat(updated.getBpmnXml()).isEqualTo(original.getBpmnXml());
+        assertThat(updated.getFlowNodes()).isEqualTo(original.getFlowNodes());
+        assertThat(updated.getSequenceFlows()).isEqualTo(original.getSequenceFlows());
+        assertThat(updated.getDeployedAt()).isEqualTo(original.getDeployedAt());
+    }
+
+    @Test
     void shouldReturnImmutableFlowNodesList() {
         // Arrange
         StartEvent start = new StartEvent("start1", "Start", List.of(), List.of("flow1"));

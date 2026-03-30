@@ -90,4 +90,9 @@ public final class ProcessDefinition {
     public Instant getDeployedAt() {
         return deployedAt;
     }
+
+    public ProcessDefinition withVersion(int newVersion) {
+        return new ProcessDefinition(this.id, this.key, newVersion, this.name, this.bpmnXml,
+                this.flowNodes, this.sequenceFlows, this.deployedAt);
+    }
 }

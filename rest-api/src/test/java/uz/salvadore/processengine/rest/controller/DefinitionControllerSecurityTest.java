@@ -27,7 +27,6 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -77,7 +76,7 @@ class DefinitionControllerSecurityTest {
         ProcessDefinition definition = createTestDefinition();
         when(bpmnParser.validate(anyString())).thenReturn(BpmnValidationResult.success());
         when(bpmnParser.parse(anyString())).thenReturn(List.of(definition));
-        doNothing().when(processEngine).deploy(any(ProcessDefinition.class));
+        when(processEngine.deploy(any(ProcessDefinition.class))).thenReturn(definition);
 
         // Act & Assert
         mockMvc.perform(multipart("/api/v1/definitions").file(createBpmnFile())
@@ -91,7 +90,7 @@ class DefinitionControllerSecurityTest {
         ProcessDefinition definition = createTestDefinition();
         when(bpmnParser.validate(anyString())).thenReturn(BpmnValidationResult.success());
         when(bpmnParser.parse(anyString())).thenReturn(List.of(definition));
-        doNothing().when(processEngine).deploy(any(ProcessDefinition.class));
+        when(processEngine.deploy(any(ProcessDefinition.class))).thenReturn(definition);
 
         // Act & Assert
         mockMvc.perform(multipart("/api/v1/definitions").file(createBpmnFile())

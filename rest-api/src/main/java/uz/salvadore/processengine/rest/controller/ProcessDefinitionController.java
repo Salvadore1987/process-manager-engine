@@ -58,9 +58,9 @@ public class ProcessDefinitionController {
 
         List<ProcessDefinition> definitions = bpmnParser.parse(bpmnXml);
         ProcessDefinition definition = definitions.getFirst();
-        processEngine.deploy(definition);
+        ProcessDefinition deployed = processEngine.deploy(definition);
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toDto(definition));
+        return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toDto(deployed));
     }
 
     @PostMapping(path = "/validate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
