@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import uz.salvadore.processengine.core.domain.exception.DuplicateProcessDefinitionException;
 import uz.salvadore.processengine.core.parser.BpmnParseException;
 import uz.salvadore.processengine.rest.dto.ErrorResponseDto;
 import uz.salvadore.processengine.rest.dto.UnsupportedElementDto;
@@ -15,6 +16,14 @@ import java.util.List;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(DuplicateProcessDefinitionException.class)
+    public ResponseEntity<ErrorResponseDto> handleDuplicateProcessDefinition(
+            DuplicateProcessDefinitionException ex, HttpServletRequest request) {
+        ErrorResponseDto error = new ErrorResponseDto(
+                "CONFLICT", ex.getMessage(), Instant.now(), request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
 
     @ExceptionHandler(ProcessNotFoundException.class)
     public ResponseEntity<ErrorResponseDto> handleProcessNotFound(ProcessNotFoundException ex,

@@ -14,6 +14,7 @@ import uz.salvadore.processengine.core.domain.model.StartEvent;
 import uz.salvadore.processengine.core.engine.ProcessDefinitionRepository;
 import uz.salvadore.processengine.core.engine.ProcessEngine;
 import uz.salvadore.processengine.core.parser.BpmnParser;
+import uz.salvadore.processengine.core.domain.exception.DuplicateProcessDefinitionException;
 import uz.salvadore.processengine.core.parser.BpmnValidationResult;
 import uz.salvadore.processengine.core.parser.UnsupportedElementError;
 import uz.salvadore.processengine.core.port.outgoing.ProcessEventStore;
@@ -81,7 +82,7 @@ class ProcessDefinitionControllerTest {
 
         when(bpmnParser.validate(anyString())).thenReturn(BpmnValidationResult.success());
         when(bpmnParser.parse(anyString())).thenReturn(List.of(definition));
-        doNothing().when(processEngine).deploy(any(ProcessDefinition.class));
+        when(processEngine.deploy(any(ProcessDefinition.class))).thenReturn(definition);
 
         // Act & Assert
         mockMvc.perform(multipart("/api/v1/definitions").file(file))
@@ -93,6 +94,27 @@ class ProcessDefinitionControllerTest {
                 .andExpect(jsonPath("$.deployedAt").value(notNullValue()));
 
         verify(processEngine).deploy(any(ProcessDefinition.class));
+    }
+
+    @Test
+    void shouldReturn409WhenDeployingDuplicateBpmn() throws Exception {
+        // Arrange
+        ProcessDefinition definition = createTestDefinition();
+        String bpmnContent = "<bpmn>valid</bpmn>";
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "process.bpmn", "application/xml",
+                bpmnContent.getBytes(StandardCharsets.UTF_8));
+
+        when(bpmnParser.validate(anyString())).thenReturn(BpmnValidationResult.success());
+        when(bpmnParser.parse(anyString())).thenReturn(List.of(definition));
+        when(processEngine.deploy(any(ProcessDefinition.class)))
+                .thenThrow(new DuplicateProcessDefinitionException("order-processing", 1));
+
+        // Act & Assert
+        mockMvc.perform(multipart("/api/v1/definitions").file(file))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("CONFLICT"))
+                .andExpect(jsonPath("$.message").value(is(notNullValue())));
     }
 
     @Test

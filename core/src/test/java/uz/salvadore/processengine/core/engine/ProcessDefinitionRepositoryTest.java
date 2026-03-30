@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import uz.salvadore.processengine.core.domain.exception.DuplicateProcessDefinitionException;
 import uz.salvadore.processengine.core.domain.model.EndEvent;
 import uz.salvadore.processengine.core.domain.model.ProcessDefinition;
 import uz.salvadore.processengine.core.domain.model.SequenceFlow;
@@ -13,6 +14,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ProcessDefinitionRepositoryTest {
 
@@ -23,11 +25,11 @@ class ProcessDefinitionRepositoryTest {
         repository = new ProcessDefinitionRepository();
     }
 
-    private ProcessDefinition createDefinition(String key, int version) {
+    private ProcessDefinition createDefinition(String key, String bpmnXml) {
         StartEvent startEvent = new StartEvent("start1", "Start", List.of(), List.of("flow1"));
         EndEvent endEvent = new EndEvent("end1", "End", List.of("flow1"), List.of(), null);
         SequenceFlow flow = new SequenceFlow("flow1", "start1", "end1", null);
-        return ProcessDefinition.create(key, version, "Test Process v" + version, "<xml/>",
+        return ProcessDefinition.create(key, 1, "Test Process", bpmnXml,
                 List.of(startEvent, endEvent), List.of(flow));
     }
 
@@ -39,13 +41,13 @@ class ProcessDefinitionRepositoryTest {
         @DisplayName("Should store deployed definition and retrieve by id")
         void shouldStoreAndRetrieveById() {
             // Arrange
-            ProcessDefinition definition = createDefinition("order-process", 1);
+            ProcessDefinition definition = createDefinition("order-process", "<xml/>");
 
             // Act
-            repository.deploy(definition);
+            ProcessDefinition deployed = repository.deploy(definition);
 
             // Assert
-            Optional<ProcessDefinition> found = repository.getById(definition.getId());
+            Optional<ProcessDefinition> found = repository.getById(deployed.getId());
             assertThat(found).isPresent();
             assertThat(found.get().getKey()).isEqualTo("order-process");
             assertThat(found.get().getVersion()).isEqualTo(1);
@@ -55,8 +57,8 @@ class ProcessDefinitionRepositoryTest {
         @DisplayName("Should support deploying multiple versions of same key")
         void shouldSupportMultipleVersions() {
             // Arrange
-            ProcessDefinition v1 = createDefinition("order-process", 1);
-            ProcessDefinition v2 = createDefinition("order-process", 2);
+            ProcessDefinition v1 = createDefinition("order-process", "<xml v1/>");
+            ProcessDefinition v2 = createDefinition("order-process", "<xml v2/>");
 
             // Act
             repository.deploy(v1);
@@ -64,6 +66,84 @@ class ProcessDefinitionRepositoryTest {
 
             // Assert
             assertThat(repository.getVersions("order-process")).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("Should assign version 1 for first deployment of key")
+        void shouldAssignVersion1ForFirstDeployment() {
+            // Arrange
+            ProcessDefinition definition = createDefinition("order-process", "<xml/>");
+
+            // Act
+            ProcessDefinition deployed = repository.deploy(definition);
+
+            // Assert
+            assertThat(deployed.getVersion()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("Should auto-increment version for existing key")
+        void shouldAutoIncrementVersionForExistingKey() {
+            // Arrange
+            ProcessDefinition v1 = createDefinition("order-process", "<xml v1/>");
+            ProcessDefinition v2 = createDefinition("order-process", "<xml v2/>");
+            ProcessDefinition v3 = createDefinition("order-process", "<xml v3/>");
+
+            // Act
+            ProcessDefinition deployed1 = repository.deploy(v1);
+            ProcessDefinition deployed2 = repository.deploy(v2);
+            ProcessDefinition deployed3 = repository.deploy(v3);
+
+            // Assert
+            assertThat(deployed1.getVersion()).isEqualTo(1);
+            assertThat(deployed2.getVersion()).isEqualTo(2);
+            assertThat(deployed3.getVersion()).isEqualTo(3);
+        }
+
+        @Test
+        @DisplayName("Should throw DuplicateProcessDefinitionException when BPMN XML is identical")
+        void shouldThrowDuplicateExceptionWhenBpmnXmlIsIdentical() {
+            // Arrange
+            ProcessDefinition first = createDefinition("order-process", "<xml/>");
+            ProcessDefinition duplicate = createDefinition("order-process", "<xml/>");
+            repository.deploy(first);
+
+            // Act & Assert
+            assertThatThrownBy(() -> repository.deploy(duplicate))
+                    .isInstanceOf(DuplicateProcessDefinitionException.class)
+                    .hasMessageContaining("order-process");
+        }
+
+        @Test
+        @DisplayName("Should allow redeploy after BPMN XML changes")
+        void shouldAllowRedeployAfterBpmnXmlChanges() {
+            // Arrange
+            ProcessDefinition v1 = createDefinition("order-process", "<xml v1/>");
+            ProcessDefinition duplicate = createDefinition("order-process", "<xml v1/>");
+            ProcessDefinition v2 = createDefinition("order-process", "<xml v2/>");
+            repository.deploy(v1);
+
+            // Act & Assert
+            assertThatThrownBy(() -> repository.deploy(duplicate))
+                    .isInstanceOf(DuplicateProcessDefinitionException.class);
+
+            ProcessDefinition deployed = repository.deploy(v2);
+            assertThat(deployed.getVersion()).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("Should return versioned definition from deploy")
+        void shouldReturnVersionedDefinitionFromDeploy() {
+            // Arrange
+            ProcessDefinition definition = createDefinition("order-process", "<xml/>");
+
+            // Act
+            ProcessDefinition deployed = repository.deploy(definition);
+
+            // Assert
+            assertThat(deployed.getVersion()).isEqualTo(1);
+            assertThat(deployed.getKey()).isEqualTo("order-process");
+            assertThat(deployed.getBpmnXml()).isEqualTo("<xml/>");
         }
     }
 
@@ -75,26 +155,26 @@ class ProcessDefinitionRepositoryTest {
         @DisplayName("Should remove all versions by key")
         void shouldRemoveAllVersionsByKey() {
             // Arrange
-            ProcessDefinition v1 = createDefinition("order-process", 1);
-            ProcessDefinition v2 = createDefinition("order-process", 2);
-            repository.deploy(v1);
-            repository.deploy(v2);
+            ProcessDefinition v1 = createDefinition("order-process", "<xml v1/>");
+            ProcessDefinition v2 = createDefinition("order-process", "<xml v2/>");
+            ProcessDefinition deployed1 = repository.deploy(v1);
+            ProcessDefinition deployed2 = repository.deploy(v2);
 
             // Act
             repository.undeploy("order-process");
 
             // Assert
             assertThat(repository.getByKey("order-process")).isEmpty();
-            assertThat(repository.getById(v1.getId())).isEmpty();
-            assertThat(repository.getById(v2.getId())).isEmpty();
+            assertThat(repository.getById(deployed1.getId())).isEmpty();
+            assertThat(repository.getById(deployed2.getId())).isEmpty();
         }
 
         @Test
         @DisplayName("Should not affect other keys when undeploying")
         void shouldNotAffectOtherKeys() {
             // Arrange
-            ProcessDefinition orderDef = createDefinition("order-process", 1);
-            ProcessDefinition paymentDef = createDefinition("payment-process", 1);
+            ProcessDefinition orderDef = createDefinition("order-process", "<xml order/>");
+            ProcessDefinition paymentDef = createDefinition("payment-process", "<xml payment/>");
             repository.deploy(orderDef);
             repository.deploy(paymentDef);
 
@@ -136,12 +216,9 @@ class ProcessDefinitionRepositoryTest {
         @DisplayName("Should return latest version for key")
         void shouldReturnLatestVersion() {
             // Arrange
-            ProcessDefinition v1 = createDefinition("order-process", 1);
-            ProcessDefinition v2 = createDefinition("order-process", 2);
-            ProcessDefinition v3 = createDefinition("order-process", 3);
-            repository.deploy(v1);
-            repository.deploy(v2);
-            repository.deploy(v3);
+            repository.deploy(createDefinition("order-process", "<xml v1/>"));
+            repository.deploy(createDefinition("order-process", "<xml v2/>"));
+            repository.deploy(createDefinition("order-process", "<xml v3/>"));
 
             // Act
             Optional<ProcessDefinition> latest = repository.getByKey("order-process");
@@ -170,10 +247,8 @@ class ProcessDefinitionRepositoryTest {
         @DisplayName("Should return all versions for key")
         void shouldReturnAllVersions() {
             // Arrange
-            ProcessDefinition v1 = createDefinition("order-process", 1);
-            ProcessDefinition v2 = createDefinition("order-process", 2);
-            repository.deploy(v1);
-            repository.deploy(v2);
+            repository.deploy(createDefinition("order-process", "<xml v1/>"));
+            repository.deploy(createDefinition("order-process", "<xml v2/>"));
 
             // Act
             List<ProcessDefinition> versions = repository.getVersions("order-process");
@@ -201,10 +276,8 @@ class ProcessDefinitionRepositoryTest {
         @DisplayName("Should return all deployed definitions")
         void shouldReturnAllDefinitions() {
             // Arrange
-            ProcessDefinition def1 = createDefinition("order-process", 1);
-            ProcessDefinition def2 = createDefinition("payment-process", 1);
-            repository.deploy(def1);
-            repository.deploy(def2);
+            repository.deploy(createDefinition("order-process", "<xml order/>"));
+            repository.deploy(createDefinition("payment-process", "<xml payment/>"));
 
             // Act
             List<ProcessDefinition> all = repository.list();
@@ -233,9 +306,9 @@ class ProcessDefinitionRepositoryTest {
 
         // Act
         for (int i = 0; i < threadCount; i++) {
-            int version = i + 1;
+            int index = i + 1;
             threads[i] = new Thread(() -> {
-                ProcessDefinition definition = createDefinition("concurrent-process", version);
+                ProcessDefinition definition = createDefinition("concurrent-process", "<xml v" + index + "/>");
                 repository.deploy(definition);
             });
             threads[i].start();

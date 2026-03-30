@@ -56,8 +56,8 @@ public final class ProcessEngine {
         this.projection = new ProcessInstanceProjection(eventApplier);
     }
 
-    public void deploy(ProcessDefinition definition) {
-        definitionRepository.deploy(definition);
+    public ProcessDefinition deploy(ProcessDefinition definition) {
+        return definitionRepository.deploy(definition);
     }
 
     public ProcessInstance startProcess(String definitionKey, Map<String, Object> variables) {

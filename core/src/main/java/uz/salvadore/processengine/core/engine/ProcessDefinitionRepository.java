@@ -1,5 +1,6 @@
 package uz.salvadore.processengine.core.engine;
 
+import uz.salvadore.processengine.core.domain.exception.DuplicateProcessDefinitionException;
 import uz.salvadore.processengine.core.domain.model.ProcessDefinition;
 
 import java.util.ArrayList;
@@ -18,13 +19,34 @@ public final class ProcessDefinitionRepository {
     private final ConcurrentHashMap<UUID, ProcessDefinition> byId = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, List<ProcessDefinition>> byKey = new ConcurrentHashMap<>();
 
-    public void deploy(ProcessDefinition definition) {
-        byId.put(definition.getId(), definition);
+    public ProcessDefinition deploy(ProcessDefinition definition) {
+        ProcessDefinition[] result = new ProcessDefinition[1];
+
         byKey.compute(definition.getKey(), (key, existing) -> {
             List<ProcessDefinition> versions = existing != null ? new ArrayList<>(existing) : new ArrayList<>();
-            versions.add(definition);
+
+            int nextVersion;
+            if (!versions.isEmpty()) {
+                ProcessDefinition latest = versions.stream()
+                        .max(Comparator.comparingInt(ProcessDefinition::getVersion))
+                        .orElseThrow();
+
+                if (latest.getBpmnXml().equals(definition.getBpmnXml())) {
+                    throw new DuplicateProcessDefinitionException(key, latest.getVersion());
+                }
+                nextVersion = latest.getVersion() + 1;
+            } else {
+                nextVersion = 1;
+            }
+
+            ProcessDefinition versioned = definition.withVersion(nextVersion);
+            versions.add(versioned);
+            result[0] = versioned;
             return versions;
         });
+
+        byId.put(result[0].getId(), result[0]);
+        return result[0];
     }
 
     public void undeploy(String key) {
