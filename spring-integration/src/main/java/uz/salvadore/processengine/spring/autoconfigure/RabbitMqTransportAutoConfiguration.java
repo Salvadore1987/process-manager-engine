@@ -1,8 +1,11 @@
 package uz.salvadore.processengine.spring.autoconfigure;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import uz.salvadore.processengine.core.port.outgoing.MessageTransport;
 import uz.salvadore.processengine.core.port.outgoing.TimerService;
@@ -66,5 +69,49 @@ public class RabbitMqTransportAutoConfiguration {
             RabbitMqConnectionManager connectionManager,
             RabbitMqTransportConfig config) {
         return new RabbitMqTimerService(connectionManager, config);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "rabbitMqTopologyLifecycle")
+    public SmartLifecycle rabbitMqTopologyLifecycle(RabbitMqTopologyInitializer topologyInitializer) {
+        return new RabbitMqTopologyLifecycle(topologyInitializer);
+    }
+
+    static class RabbitMqTopologyLifecycle implements SmartLifecycle {
+
+        private static final Logger log = LoggerFactory.getLogger(RabbitMqTopologyLifecycle.class);
+
+        private final RabbitMqTopologyInitializer topologyInitializer;
+        private volatile boolean running = false;
+
+        RabbitMqTopologyLifecycle(RabbitMqTopologyInitializer topologyInitializer) {
+            this.topologyInitializer = topologyInitializer;
+        }
+
+        @Override
+        public void start() {
+            try {
+                topologyInitializer.initializeTopology();
+                running = true;
+                log.info("RabbitMQ topology initialized successfully");
+            } catch (Exception e) {
+                throw new IllegalStateException("Failed to initialize RabbitMQ topology", e);
+            }
+        }
+
+        @Override
+        public void stop() {
+            running = false;
+        }
+
+        @Override
+        public boolean isRunning() {
+            return running;
+        }
+
+        @Override
+        public int getPhase() {
+            return Integer.MIN_VALUE + 100;
+        }
     }
 }

@@ -12,6 +12,7 @@
             <option value="$PROJECT_DIR$/core" />
             <option value="$PROJECT_DIR$/rabbitmq-transport" />
             <option value="$PROJECT_DIR$/rest-api" />
+            <option value="$PROJECT_DIR$/security" />
             <option value="$PROJECT_DIR$/spring-integration" />
           </set>
         </option>
