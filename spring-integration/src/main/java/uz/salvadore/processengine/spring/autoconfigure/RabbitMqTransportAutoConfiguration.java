@@ -7,6 +7,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
+import uz.salvadore.processengine.core.port.outgoing.DeploymentListener;
 import uz.salvadore.processengine.core.port.outgoing.MessageTransport;
 import uz.salvadore.processengine.core.port.outgoing.TimerService;
 import uz.salvadore.processengine.rabbitmq.RabbitMqConnectionManager;
@@ -69,6 +70,12 @@ public class RabbitMqTransportAutoConfiguration {
             RabbitMqConnectionManager connectionManager,
             RabbitMqTransportConfig config) {
         return new RabbitMqTimerService(connectionManager, config);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "rabbitMqDeploymentListener")
+    public DeploymentListener rabbitMqDeploymentListener(RabbitMqTopologyInitializer topologyInitializer) {
+        return new RabbitMqDeploymentListener(topologyInitializer);
     }
 
     @Bean

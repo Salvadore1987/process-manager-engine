@@ -19,6 +19,7 @@ import uz.salvadore.processengine.core.engine.context.ExecutionContext;
 import uz.salvadore.processengine.core.engine.eventsourcing.EventApplier;
 import uz.salvadore.processengine.core.engine.eventsourcing.EventSequencer;
 import uz.salvadore.processengine.core.engine.eventsourcing.ProcessInstanceProjection;
+import uz.salvadore.processengine.core.port.outgoing.DeploymentListener;
 import uz.salvadore.processengine.core.port.outgoing.ProcessEventStore;
 import uz.salvadore.processengine.core.util.UUIDv7;
 
@@ -42,22 +43,36 @@ public final class ProcessEngine {
     private final EventSequencer eventSequencer;
     private final EventApplier eventApplier;
     private final ProcessInstanceProjection projection;
+    private final List<DeploymentListener> deploymentListeners;
     private final ConcurrentHashMap<UUID, UUID> instanceDefinitionMap = new ConcurrentHashMap<>();
 
     public ProcessEngine(ProcessEventStore eventStore,
                          ProcessDefinitionRepository definitionRepository,
                          TokenExecutor tokenExecutor,
                          EventSequencer eventSequencer) {
+        this(eventStore, definitionRepository, tokenExecutor, eventSequencer, List.of());
+    }
+
+    public ProcessEngine(ProcessEventStore eventStore,
+                         ProcessDefinitionRepository definitionRepository,
+                         TokenExecutor tokenExecutor,
+                         EventSequencer eventSequencer,
+                         List<DeploymentListener> deploymentListeners) {
         this.eventStore = eventStore;
         this.definitionRepository = definitionRepository;
         this.tokenExecutor = tokenExecutor;
         this.eventSequencer = eventSequencer;
         this.eventApplier = new EventApplier();
         this.projection = new ProcessInstanceProjection(eventApplier);
+        this.deploymentListeners = deploymentListeners;
     }
 
     public ProcessDefinition deploy(ProcessDefinition definition) {
-        return definitionRepository.deploy(definition);
+        ProcessDefinition deployed = definitionRepository.deploy(definition);
+        for (DeploymentListener listener : deploymentListeners) {
+            listener.onDeploy(deployed);
+        }
+        return deployed;
     }
 
     public ProcessInstance startProcess(String definitionKey, Map<String, Object> variables) {
