@@ -8,9 +8,13 @@ import uz.salvadore.processengine.core.adapter.inmemory.InMemoryEventStore;
 import uz.salvadore.processengine.core.domain.enums.NodeType;
 import uz.salvadore.processengine.core.domain.enums.ProcessState;
 import uz.salvadore.processengine.core.domain.enums.TokenState;
+import uz.salvadore.processengine.core.domain.event.CompensationTriggeredEvent;
+import uz.salvadore.processengine.core.domain.event.ProcessErrorEvent;
 import uz.salvadore.processengine.core.domain.event.ProcessEvent;
 import uz.salvadore.processengine.core.domain.model.CallActivity;
+import uz.salvadore.processengine.core.domain.model.CompensationBoundaryEvent;
 import uz.salvadore.processengine.core.domain.model.EndEvent;
+import uz.salvadore.processengine.core.domain.model.ErrorBoundaryEvent;
 import uz.salvadore.processengine.core.domain.model.ProcessDefinition;
 import uz.salvadore.processengine.core.domain.model.ProcessInstance;
 import uz.salvadore.processengine.core.domain.model.SequenceFlow;
@@ -20,7 +24,9 @@ import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.condition.SimpleConditionEvaluator;
 import uz.salvadore.processengine.core.engine.eventsourcing.EventSequencer;
 import uz.salvadore.processengine.core.engine.handler.CallActivityHandler;
+import uz.salvadore.processengine.core.engine.handler.CompensationBoundaryEventHandler;
 import uz.salvadore.processengine.core.engine.handler.EndEventHandler;
+import uz.salvadore.processengine.core.engine.handler.ErrorBoundaryEventHandler;
 import uz.salvadore.processengine.core.engine.handler.ExclusiveGatewayHandler;
 import uz.salvadore.processengine.core.engine.handler.NodeHandler;
 import uz.salvadore.processengine.core.engine.handler.ParallelGatewayHandler;
@@ -72,13 +78,15 @@ class ProcessEngineTest {
 
         SimpleConditionEvaluator conditionEvaluator = new SimpleConditionEvaluator();
 
-        Map<NodeType, NodeHandler> handlers = Map.of(
-                NodeType.START_EVENT, new StartEventHandler(eventSequencer),
-                NodeType.END_EVENT, new EndEventHandler(eventSequencer),
-                NodeType.SERVICE_TASK, new ServiceTaskHandler(messageTransport),
-                NodeType.EXCLUSIVE_GATEWAY, new ExclusiveGatewayHandler(conditionEvaluator, eventSequencer),
-                NodeType.PARALLEL_GATEWAY, new ParallelGatewayHandler(eventSequencer),
-                NodeType.CALL_ACTIVITY, new CallActivityHandler(eventSequencer)
+        Map<NodeType, NodeHandler> handlers = Map.ofEntries(
+                Map.entry(NodeType.START_EVENT, new StartEventHandler(eventSequencer)),
+                Map.entry(NodeType.END_EVENT, new EndEventHandler(eventSequencer)),
+                Map.entry(NodeType.SERVICE_TASK, new ServiceTaskHandler(messageTransport)),
+                Map.entry(NodeType.EXCLUSIVE_GATEWAY, new ExclusiveGatewayHandler(conditionEvaluator, eventSequencer)),
+                Map.entry(NodeType.PARALLEL_GATEWAY, new ParallelGatewayHandler(eventSequencer)),
+                Map.entry(NodeType.CALL_ACTIVITY, new CallActivityHandler(eventSequencer)),
+                Map.entry(NodeType.ERROR_BOUNDARY, new ErrorBoundaryEventHandler(eventSequencer)),
+                Map.entry(NodeType.COMPENSATION_BOUNDARY, new CompensationBoundaryEventHandler(eventSequencer))
         );
 
         TokenExecutor tokenExecutor = new TokenExecutor(handlers);
@@ -428,6 +436,150 @@ class ProcessEngineTest {
             assertThatThrownBy(() -> engine.getProcessInstance(UUID.randomUUID()))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("Process instance not found");
+        }
+    }
+
+    @Nested
+    @DisplayName("failTask()")
+    class FailTaskTests {
+
+        @Test
+        @DisplayName("Should route token through error boundary when ErrorBoundaryEvent exists")
+        void shouldRouteToErrorBoundaryWhenErrorBoundaryExists() {
+            // Arrange
+            // Process: Start → task1 → End1
+            // ErrorBoundaryEvent attached to task1 → errorHandler → End2
+            StartEvent startEvent = new StartEvent("start1", "Start", List.of(), List.of("flow1"));
+            ServiceTask task1 = new ServiceTask("task1", "Do Work",
+                    List.of("flow1"), List.of("flow2"), "work.topic", 0, Duration.ZERO);
+            EndEvent endEvent1 = new EndEvent("end1", "End", List.of("flow2"), List.of(), null);
+
+            ErrorBoundaryEvent errorBoundary = new ErrorBoundaryEvent(
+                    "errorBoundary1", "Error Boundary",
+                    List.of(), List.of("flow-err1"),
+                    "task1", "TASK_ERROR", true);
+            ServiceTask errorHandler = new ServiceTask("errorHandler", "Handle Error",
+                    List.of("flow-err1"), List.of("flow-err2"), "error.topic", 0, Duration.ZERO);
+            EndEvent endEvent2 = new EndEvent("end2", "End2", List.of("flow-err2"), List.of(), null);
+
+            SequenceFlow flow1 = new SequenceFlow("flow1", "start1", "task1", null);
+            SequenceFlow flow2 = new SequenceFlow("flow2", "task1", "end1", null);
+            SequenceFlow flowErr1 = new SequenceFlow("flow-err1", "errorBoundary1", "errorHandler", null);
+            SequenceFlow flowErr2 = new SequenceFlow("flow-err2", "errorHandler", "end2", null);
+
+            ProcessDefinition definition = ProcessDefinition.create(
+                    "error-boundary-process", 1, "Error Boundary Process", "<xml/>",
+                    List.of(startEvent, task1, endEvent1, errorBoundary, errorHandler, endEvent2),
+                    List.of(flow1, flow2, flowErr1, flowErr2));
+            engine.deploy(definition);
+
+            ProcessInstance started = engine.startProcess("error-boundary-process", Map.of());
+            Token waitingToken = started.getTokens().stream()
+                    .filter(t -> t.getState() == TokenState.WAITING)
+                    .findFirst()
+                    .orElseThrow();
+
+            // Act
+            ProcessInstance result = engine.failTask(waitingToken.getId(), "TASK_ERROR", "Something went wrong");
+
+            // Assert
+            // Token should have been routed through the error boundary to errorHandler (ServiceTask),
+            // which sends a message on "error.topic"
+            assertThat(result.getState()).isEqualTo(ProcessState.RUNNING);
+            assertThat(messageTransport.sendCalls)
+                    .anyMatch(call -> call.topic().equals("error.topic"));
+        }
+
+        @Test
+        @DisplayName("Should trigger compensation and go to ERROR state when no error boundary exists")
+        void shouldTriggerCompensationWhenNoErrorBoundary() {
+            // Arrange
+            // Process: Start → task1 → task2 → End
+            // CompensationBoundaryEvent attached to task1 → compensationTask
+            StartEvent startEvent = new StartEvent("start1", "Start", List.of(), List.of("flow1"));
+            ServiceTask task1 = new ServiceTask("task1", "First Task",
+                    List.of("flow1"), List.of("flow2"), "first.topic", 0, Duration.ZERO);
+            ServiceTask task2 = new ServiceTask("task2", "Second Task",
+                    List.of("flow2"), List.of("flow3"), "second.topic", 0, Duration.ZERO);
+            EndEvent endEvent = new EndEvent("end1", "End", List.of("flow3"), List.of(), null);
+
+            CompensationBoundaryEvent compensationBoundary = new CompensationBoundaryEvent(
+                    "compBoundary1", "Compensation Boundary",
+                    List.of(), List.of("flow-comp1"),
+                    "task1");
+            ServiceTask compensationTask = new ServiceTask("compTask1", "Undo First Task",
+                    List.of("flow-comp1"), List.of(), "compensation.topic", 0, Duration.ZERO);
+
+            SequenceFlow flow1 = new SequenceFlow("flow1", "start1", "task1", null);
+            SequenceFlow flow2 = new SequenceFlow("flow2", "task1", "task2", null);
+            SequenceFlow flow3 = new SequenceFlow("flow3", "task2", "end1", null);
+            SequenceFlow flowComp1 = new SequenceFlow("flow-comp1", "compBoundary1", "compTask1", null);
+
+            ProcessDefinition definition = ProcessDefinition.create(
+                    "compensation-process", 1, "Compensation Process", "<xml/>",
+                    List.of(startEvent, task1, task2, endEvent, compensationBoundary, compensationTask),
+                    List.of(flow1, flow2, flow3, flowComp1));
+            engine.deploy(definition);
+
+            // Start process — token arrives at task1 (WAITING)
+            ProcessInstance started = engine.startProcess("compensation-process", Map.of());
+            Token waitingTask1 = started.getTokens().stream()
+                    .filter(t -> t.getState() == TokenState.WAITING)
+                    .findFirst()
+                    .orElseThrow();
+
+            // Complete task1 — token moves to task2 (WAITING)
+            ProcessInstance afterTask1 = engine.completeTask(waitingTask1.getId(), Map.of());
+            Token waitingTask2 = afterTask1.getTokens().stream()
+                    .filter(t -> t.getState() == TokenState.WAITING)
+                    .findFirst()
+                    .orElseThrow();
+
+            int sendCallsBefore = messageTransport.sendCalls.size();
+
+            // Act — fail task2 (no error boundary on task2, triggers compensation for task1)
+            ProcessInstance result = engine.failTask(waitingTask2.getId(), "FAIL_CODE", "Task 2 failed");
+
+            // Assert — compensation task was sent to MessageTransport
+            assertThat(messageTransport.sendCalls.size()).isGreaterThan(sendCallsBefore);
+            assertThat(messageTransport.sendCalls)
+                    .anyMatch(call -> call.topic().equals("compensation.topic"));
+
+            // Assert — compensation token is registered in instance and WAITING
+            assertThat(result.getTokens())
+                    .anyMatch(t -> t.getCurrentNodeId().equals("compTask1") && t.getState() == TokenState.WAITING);
+
+            // Assert — process should go to ERROR state (after compensation triggered)
+            assertThat(result.getState()).isEqualTo(ProcessState.ERROR);
+
+            // Assert — CompensationTriggeredEvent and ProcessErrorEvent are in event store
+            List<ProcessEvent> storedEvents = eventStore.getEvents(result.getId());
+            assertThat(storedEvents)
+                    .filteredOn(CompensationTriggeredEvent.class::isInstance)
+                    .hasSize(1);
+            assertThat(storedEvents)
+                    .filteredOn(ProcessErrorEvent.class::isInstance)
+                    .hasSize(1);
+        }
+
+        @Test
+        @DisplayName("Should go to ERROR state when no error boundary and no compensation exist")
+        void shouldGoToErrorStateWhenNoErrorBoundaryAndNoCompensation() {
+            // Arrange
+            ProcessDefinition definition = createSimpleLinearProcess();
+            engine.deploy(definition);
+
+            ProcessInstance started = engine.startProcess("simple-process", Map.of());
+            Token waitingToken = started.getTokens().stream()
+                    .filter(t -> t.getState() == TokenState.WAITING)
+                    .findFirst()
+                    .orElseThrow();
+
+            // Act
+            ProcessInstance result = engine.failTask(waitingToken.getId(), "GENERIC_ERROR", "Something failed");
+
+            // Assert
+            assertThat(result.getState()).isEqualTo(ProcessState.ERROR);
         }
     }
 }

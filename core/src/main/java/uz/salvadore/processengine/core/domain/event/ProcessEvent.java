@@ -15,7 +15,8 @@ public sealed interface ProcessEvent permits
         TimerFiredEvent,
         CompensationTriggeredEvent,
         CallActivityStartedEvent,
-        CallActivityCompletedEvent {
+        CallActivityCompletedEvent,
+        TokenWaitingEvent {
 
     UUID id();
 

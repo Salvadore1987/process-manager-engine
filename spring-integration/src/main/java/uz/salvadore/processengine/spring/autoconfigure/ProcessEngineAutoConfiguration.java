@@ -1,6 +1,8 @@
 package uz.salvadore.processengine.spring.autoconfigure;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -25,6 +27,7 @@ import uz.salvadore.processengine.core.port.outgoing.DeploymentListener;
 import uz.salvadore.processengine.core.port.outgoing.MessageTransport;
 import uz.salvadore.processengine.core.port.outgoing.ProcessEventStore;
 import uz.salvadore.processengine.core.port.outgoing.TimerService;
+import uz.salvadore.processengine.rabbitmq.RabbitMqTopologyInitializer;
 
 import java.util.List;
 import java.util.Map;
@@ -79,5 +82,25 @@ public class ProcessEngineAutoConfiguration {
                                        EventSequencer eventSequencer,
                                        List<DeploymentListener> deploymentListeners) {
         return new ProcessEngine(eventStore, definitionRepository, tokenExecutor, eventSequencer, deploymentListeners);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "rabbitMqDeploymentListener")
+    @ConditionalOnBean(RabbitMqTopologyInitializer.class)
+    public DeploymentListener rabbitMqDeploymentListener(
+            RabbitMqTopologyInitializer topologyInitializer,
+            MessageTransport messageTransport,
+            ObjectProvider<ProcessEngine> processEngineProvider) {
+        return new RabbitMqDeploymentListener(
+                topologyInitializer,
+                messageTransport,
+                result -> {
+                    if (result.success()) {
+                        processEngineProvider.getObject().completeTask(result.correlationId(), result.payload());
+                    } else {
+                        processEngineProvider.getObject().failTask(result.correlationId(), result.errorCode(), String.valueOf(result.payload().get("message")));
+                    }
+                }
+        );
     }
 }

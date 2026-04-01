@@ -6,6 +6,7 @@ Java 21 движок бизнес-процессов на основе **BPMN 2.
 
 - **BPMN 2.0 парсинг и валидация** — загрузка XML из Camunda Modeler с проверкой поддерживаемых элементов
 - **Token-based execution** — продвижение токенов по графу: StartEvent, EndEvent, ServiceTask, ExclusiveGateway, ParallelGateway, CallActivity, Boundary Events
+- **Error handling & Compensation** — маршрутизация ошибок через ErrorBoundaryEvent, автоматическая компенсация завершённых задач в обратном порядке (LIFO) при отсутствии error boundary
 - **Event Sourcing** — все изменения состояния записываются как события, состояние восстанавливается через replay
 - **RabbitMQ транспорт** — каждый ServiceTask отправляет сообщения в свой topic, retry с exponential backoff, DLQ
 - **Spring Boot Starter** — автоконфигурация, health indicators, Micrometer метрики

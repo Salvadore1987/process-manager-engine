@@ -15,6 +15,7 @@ import uz.salvadore.processengine.core.domain.event.TaskCompletedEvent;
 import uz.salvadore.processengine.core.domain.event.TimerFiredEvent;
 import uz.salvadore.processengine.core.domain.event.TimerScheduledEvent;
 import uz.salvadore.processengine.core.domain.event.TokenMovedEvent;
+import uz.salvadore.processengine.core.domain.event.TokenWaitingEvent;
 import uz.salvadore.processengine.core.domain.model.ProcessInstance;
 import uz.salvadore.processengine.core.domain.model.Token;
 
@@ -41,9 +42,10 @@ public final class EventApplier {
             case ProcessErrorEvent e -> applyError(instance);
             case TimerScheduledEvent e -> instance;
             case TimerFiredEvent e -> applyTimerFired(e, instance);
-            case CompensationTriggeredEvent e -> instance;
+            case CompensationTriggeredEvent e -> applyCompensationTriggered(instance);
             case CallActivityStartedEvent e -> applyCallActivityStarted(e, instance);
             case CallActivityCompletedEvent e -> applyCallActivityCompleted(e, instance);
+            case TokenWaitingEvent e -> applyTokenWaiting(e, instance);
         };
     }
 
@@ -174,7 +176,32 @@ public final class EventApplier {
         return instance.withTokens(updatedTokens);
     }
 
+    private ProcessInstance applyCompensationTriggered(ProcessInstance instance) {
+        return ProcessInstance.restore(
+                instance.getId(),
+                instance.getDefinitionId(),
+                instance.getParentProcessInstanceId(),
+                ProcessState.COMPENSATING,
+                instance.getTokens(),
+                instance.getVariables(),
+                instance.getStartedAt(),
+                instance.getCompletedAt()
+        );
+    }
+
     private ProcessInstance applyCallActivityStarted(CallActivityStartedEvent event, ProcessInstance instance) {
+        List<Token> updatedTokens = new ArrayList<>();
+        for (Token token : instance.getTokens()) {
+            if (token.getId().equals(event.tokenId())) {
+                updatedTokens.add(Token.restore(token.getId(), event.nodeId(), TokenState.WAITING));
+            } else {
+                updatedTokens.add(token);
+            }
+        }
+        return instance.withTokens(updatedTokens);
+    }
+
+    private ProcessInstance applyTokenWaiting(TokenWaitingEvent event, ProcessInstance instance) {
         List<Token> updatedTokens = new ArrayList<>();
         for (Token token : instance.getTokens()) {
             if (token.getId().equals(event.tokenId())) {

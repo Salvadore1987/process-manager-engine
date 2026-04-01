@@ -34,8 +34,14 @@ public class TaskHandlerBeanPostProcessor implements BeanPostProcessor {
             JobWorker annotation = method.getAnnotation(JobWorker.class);
             if (annotation != null) {
                 String topic = annotation.topic();
-                log.info("Registering @JobWorker for topic '{}': {}", topic, bean.getClass().getName());
-                registry.register(topic, handler);
+                WorkerRetryConfig retryConfig = new WorkerRetryConfig(
+                        annotation.retry(),
+                        annotation.retryCount(),
+                        annotation.retryBackoff()
+                );
+                log.info("Registering @JobWorker for topic '{}' (retry={}): {}",
+                        topic, annotation.retry(), bean.getClass().getName());
+                registry.register(topic, handler, retryConfig);
             }
         }
 

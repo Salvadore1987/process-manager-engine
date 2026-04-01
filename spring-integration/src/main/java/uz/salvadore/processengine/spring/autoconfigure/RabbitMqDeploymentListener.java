@@ -17,7 +17,7 @@ import java.util.function.Consumer;
 /**
  * Creates RabbitMQ queues and bindings for all ServiceTask topics
  * when a process definition is deployed, and subscribes to result queues
- * so that task completions are automatically processed.
+ * so that task completions and failures are automatically processed.
  */
 public class RabbitMqDeploymentListener implements DeploymentListener {
 
