@@ -1,0 +1,35 @@
+package uz.salvadore.processengine.worker.registry;
+
+import uz.salvadore.processengine.worker.ExternalTaskHandler;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Maintains the mapping between task topics and their handler instances.
+ * Each topic may have exactly one handler.
+ */
+public class TaskHandlerRegistry {
+
+    private final Map<String, ExternalTaskHandler> handlers = new ConcurrentHashMap<>();
+
+    public void register(String topic, ExternalTaskHandler handler) {
+        ExternalTaskHandler existing = handlers.putIfAbsent(topic, handler);
+        if (existing != null) {
+            throw new IllegalStateException(
+                    "Duplicate @TaskHandler for topic '" + topic + "': " +
+                            existing.getClass().getName() + " and " + handler.getClass().getName()
+            );
+        }
+    }
+
+    public ExternalTaskHandler getHandler(String topic) {
+        return handlers.get(topic);
+    }
+
+    public Set<String> getTopics() {
+        return Collections.unmodifiableSet(handlers.keySet());
+    }
+}

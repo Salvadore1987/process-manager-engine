@@ -2,7 +2,7 @@
 
 ## Context
 
-Проект greenfield — Java 21 движок бизнес-процессов на основе BPMN 2.0 с event-sourced архитектурой и RabbitMQ транспортом. Текущее состояние: пустой Gradle проект без исходного кода. Спецификация готова в `docs/process-manager-engine.md`.
+Java 21 движок бизнес-процессов на основе BPMN 2.0 с event-sourced архитектурой и RabbitMQ транспортом. Проект состоит из 6 модулей: `core`, `rabbitmq-transport`, `spring-integration`, `rest-api`, `security`, `worker-spring-boot-starter`. Спецификация в `docs/process-manager-engine.md`.
 
 ---
 
@@ -38,7 +38,7 @@ uz.salvadore.processengine.core
                      ProcessCompleted/ErrorEvent, TimerScheduled/FiredEvent,
                      CompensationTriggeredEvent, CallActivityStarted/CompletedEvent
   .domain.enums    — ProcessState, TokenState, NodeType
-  .port.outgoing   — ProcessEventStore, MessageTransport, TimerService
+  .port.outgoing   — ProcessEventStore, MessageTransport, TimerService, DeploymentListener
   .port.incoming   — ActivityHandler
   .util            — UUIDv7
 ```
@@ -229,6 +229,59 @@ uz.salvadore.processengine.rest
 
 ---
 
+## Phase 8: Security (OAuth2/Keycloak)
+
+**Цель:** Авторизация REST API через JWT-токены Keycloak.
+
+**Пакеты:**
+```
+uz.salvadore.processengine.security
+  .config  — ResourceServerConfig
+  .converter — KeycloakJwtAuthenticationConverter
+  .model   — ProcessEngineRole
+```
+
+**Ключевые решения:**
+- 4 роли: `process-admin`, `process-operator`, `process-viewer`, `process-deployer`
+- Endpoint-access matrix через `HttpSecurity` authorizeHttpRequests
+- JWT конвертер извлекает роли из Keycloak realm_access/resource_access claims
+- Условное включение: `process-engine.security.enabled=true`
+
+**Тесты:** SecurityConfig тесты с mock JWT, endpoint access matrix
+
+**Проверка:** `./gradlew :security:test`
+
+---
+
+## Phase 9: Worker Spring Boot Starter
+
+**Цель:** Клиентский Spring Boot Starter для внешних worker-сервисов.
+
+**Пакеты:**
+```
+uz.salvadore.processengine.worker
+  .annotation      — @JobWorker
+  ExternalTaskHandler.java — интерфейс с execute(TaskContext)
+  TaskContext.java — переменные + complete()/error()
+  TaskExecutionException.java
+  .registry        — TaskHandlerRegistry, TaskHandlerBeanPostProcessor
+  .listener        — TaskListenerContainer (SmartLifecycle)
+  .autoconfigure   — WorkerAutoConfiguration, WorkerProperties, WorkerHealthIndicator
+```
+
+**Ключевые решения:**
+- `ExternalTaskHandler` + `@JobWorker(topic)` на методе `execute` — явный контракт
+- `TaskContext.complete(Map)` / `TaskContext.error(code, message)` — ручное управление ответом
+- `TaskListenerContainer` — SmartLifecycle, passive queue declare (не конфликтует с engine DLX args)
+- Модуль не зависит от `core` и `rabbitmq-transport` — самостоятельная библиотека
+- `BeanPostProcessor` сканирует `ExternalTaskHandler` бины с `@JobWorker`
+
+**Тесты:** интеграция с Testcontainers RabbitMQ, handler dispatch, error handling
+
+**Проверка:** `./gradlew :worker-spring-boot-starter:test`
+
+---
+
 ## Граф зависимостей между фазами
 
 ```
@@ -248,8 +301,11 @@ Phase 1 (Domain model)
           ▼
        Phase 6 (Spring integration) ← зависит от 4, 5
           │
-          ▼
-       Phase 7 (REST API)           ← зависит от 6
+          ├──→ Phase 7 (REST API)           ← зависит от 6
+          │
+          ├──→ Phase 8 (Security)           ← зависит от 7
+          │
+          └──→ Phase 9 (Worker starter)     ← независим, параллельно с 7-8
 ```
 
 ## Оценка объёма
@@ -264,4 +320,6 @@ Phase 1 (Domain model)
 | 5 | rabbitmq-transport | ~8 |
 | 6 | spring-integration | ~6 |
 | 7 | rest-api | ~16 |
-| **Итого** | | **~89 тестов** |
+| 8 | security | ~10 |
+| 9 | worker-spring-boot-starter | ~8 |
+| **Итого** | | **~107 тестов** |

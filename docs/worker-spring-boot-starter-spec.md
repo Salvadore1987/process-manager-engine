@@ -10,25 +10,25 @@ External services (workers) that implement BPMN ServiceTasks must manually:
 - Publish result to exchange `process-engine.tasks` with routing key `task.{topic}.result`
 - Follow error format convention (`__error`, `__errorCode`)
 
-This is boilerplate that will be duplicated across every worker service. The starter reduces integration to a single annotation and a business method.
+The starter eliminates this boilerplate. Integration reduces to implementing one interface and annotating one method.
 
 ## Goal
 
-New Gradle module `worker-spring-boot-starter` — a standalone Spring Boot Starter that any external service includes as a dependency to interact with Process Manager Engine.
+Gradle module `worker-spring-boot-starter` — a standalone Spring Boot Starter that any external service includes as a dependency to interact with Process Manager Engine.
 
-**Important:** the module does NOT depend on `core` or `rabbitmq-transport`. It is a self-contained client library that only replicates the messaging protocol.
+The module does **not** depend on `core` or `rabbitmq-transport`. It is a self-contained client library that replicates only the messaging protocol.
 
 ---
 
-## Developer Experience
+## Quick Start
 
-### 1. Dependency
+### 1. Add dependency
 
 ```gradle
 implementation("uz.salvadore:worker-spring-boot-starter:1.0-SNAPSHOT")
 ```
 
-### 2. Configuration (`application.yml`)
+### 2. Configure RabbitMQ (`application.yml`)
 
 ```yaml
 process-engine:
@@ -41,131 +41,166 @@ process-engine:
       virtual-host: /
 ```
 
-### 3. Task handler — `@TaskHandler` annotation
+### 3. Implement a worker
 
 ```java
 @Component
-public class OrderValidationHandler {
+public class OrderValidationHandler implements ExternalTaskHandler {
 
-    @TaskHandler(topic = "order.validate")
-    public Map<String, Object> validate(TaskContext context) {
-        String orderId = (String) context.getVariable("orderId");
-        // business logic
-        return Map.of("validationResult", "OK", "discount", 10);
+    @Override
+    @JobWorker(topic = "order.validate")
+    public void execute(TaskContext context) {
+        try {
+            String orderId = (String) context.getVariable("orderId");
+            Integer amount = (Integer) context.getVariable("amount");
+
+            // business logic
+            boolean valid = amount > 0;
+
+            if (valid) {
+                context.complete(Map.of("validationResult", "OK", "discount", 10));
+            } else {
+                context.error("VALIDATION_FAILED", "Amount must be positive");
+            }
+        } catch (Exception e) {
+            context.error("UNEXPECTED_ERROR", e.getMessage());
+        }
     }
 }
 ```
 
-### 4. Error handling
+---
+
+## API Reference
+
+### `ExternalTaskHandler` interface
 
 ```java
-@TaskHandler(topic = "order.validate")
-public Map<String, Object> validate(TaskContext context) {
-    if (invalid) {
-        throw new TaskExecutionException("VALIDATION_FAILED", "Invalid order");
-    }
-    return Map.of("result", "OK");
+public interface ExternalTaskHandler {
+    void execute(TaskContext context);
 }
 ```
 
-When `TaskExecutionException` is thrown, the starter automatically builds a response with `__error: true` and `__errorCode`.
+Every worker class must implement this interface.
+
+### `@JobWorker` annotation
+
+- **Target:** method (`execute`)
+- **Required attribute:** `topic` — the ServiceTask topic name from the BPMN process
+
+### `TaskContext`
+
+| Method | Description |
+|--------|-------------|
+| `getCorrelationId()` | Returns the correlation ID (token UUID) |
+| `getVariables()` | Returns all process variables as `Map<String, Object>` |
+| `getVariable(String name)` | Returns a single variable by name, or `null` |
+| `complete(Map<String, Object> result)` | Completes the task with result variables that merge into the process |
+| `error(String errorCode, String errorMessage)` | Fails the task with an error code and message |
+
+**Rules:**
+- Either `complete()` or `error()` must be called exactly once
+- Calling both or calling either twice throws `IllegalStateException`
+- If neither is called, the starter auto-completes with an empty result and logs a warning
+
+### `TaskExecutionException`
+
+Optional exception class with `errorCode` and `message` fields. Can be used for structured error handling in custom middleware or interceptors.
 
 ---
 
-## Components
+## Messaging Protocol
 
-| Component | Purpose |
-|-----------|---------|
-| `@TaskHandler(topic)` | Method-level annotation — binds method to a topic |
-| `TaskContext` | Wrapper: `correlationId`, `variables` (payload from execute queue) |
-| `TaskExecutionException` | Exception → automatic error response with `__errorCode` |
-| `WorkerProperties` | `@ConfigurationProperties("process-engine.worker")` — RabbitMQ settings |
-| `WorkerAutoConfiguration` | Auto-configuration: RabbitMQ connection, handler scanning, consumer startup |
-| `TaskHandlerRegistry` | Registry: topic → handler method. Populated at startup via `BeanPostProcessor` |
-| `TaskListenerContainer` | For each registered topic: creates consumer on `task.{topic}.execute`, invokes handler, publishes result to `task.{topic}.result` |
-| `WorkerHealthIndicator` | Health check: RabbitMQ connection + consumer status |
+### Receiving a task
 
----
-
-## Messaging Protocol (mirrors existing engine protocol)
-
-### Receiving a task (consume from `task.{topic}.execute`)
+Worker consumes from queue `task.{topic}.execute`:
 
 - **Body:** JSON — all process variables
 - **correlationId:** from AMQP `correlationId` property or `x-correlation-id` header
 
-### Sending a result (publish to exchange `process-engine.tasks`, routing key `task.{topic}.result`)
+### Sending a result
 
-- **Body:** JSON — handler return value
+Worker publishes to exchange `process-engine.tasks` with routing key `task.{topic}.result`:
+
+- **Body:** JSON — result from `complete()` or error payload from `error()`
 - **correlationId:** same UUID from the received task
 - **contentType:** `application/json`
 - **deliveryMode:** 2 (persistent)
 - **headers:** `x-correlation-id` with the same UUID
 
-### Error format
+### Success payload
 
 ```json
-{"__error": true, "__errorCode": "CODE", "message": "description"}
+{"validationResult": "OK", "discount": 10}
+```
+
+### Error payload (generated automatically by `context.error()`)
+
+```json
+{"__error": true, "__errorCode": "VALIDATION_FAILED", "message": "Amount must be positive"}
 ```
 
 ---
 
-## Lifecycle
+## Architecture
 
-1. **Application startup** → `WorkerAutoConfiguration` creates RabbitMQ connection (ConnectionFactory)
-2. **BeanPostProcessor** scans beans, finds methods annotated with `@TaskHandler`, registers them in `TaskHandlerRegistry`
-3. **SmartLifecycle** (`TaskListenerContainer`) for each registered topic:
-   - Declares queue `task.{topic}.execute` via passive declare (does not conflict with engine's DLX arguments)
+### Components
+
+| Component | Purpose |
+|-----------|---------|
+| `@JobWorker(topic)` | Method annotation — binds `execute()` to a topic |
+| `ExternalTaskHandler` | Interface — contract for worker implementations |
+| `TaskContext` | Context with variables + `complete()`/`error()` response methods |
+| `TaskHandlerRegistry` | Registry: topic -> handler. One handler per topic |
+| `TaskHandlerBeanPostProcessor` | Scans beans for `ExternalTaskHandler` + `@JobWorker`, registers them |
+| `TaskListenerContainer` | `SmartLifecycle`: creates RabbitMQ consumers, dispatches to handlers |
+| `WorkerAutoConfiguration` | Auto-configuration: connection, registry, listeners, health |
+| `WorkerProperties` | `@ConfigurationProperties("process-engine.worker")` |
+| `WorkerHealthIndicator` | Health check: RabbitMQ connection + consumer status |
+
+### Lifecycle
+
+1. **Startup** — `WorkerAutoConfiguration` creates RabbitMQ `ConnectionFactory`
+2. **Bean scanning** — `BeanPostProcessor` finds `ExternalTaskHandler` beans with `@JobWorker`, registers in `TaskHandlerRegistry`
+3. **Consumer startup** — `TaskListenerContainer` (SmartLifecycle) for each registered topic:
+   - Passive declares queue `task.{topic}.execute` (does not conflict with engine's DLX arguments)
    - Starts consumer
-4. **On message received:**
+4. **Message received:**
    - Deserialize JSON payload
-   - Create `TaskContext(correlationId, variables)`
-   - Invoke handler method
-   - On success: publish result to `task.{topic}.result`
-   - On `TaskExecutionException`: publish error response
+   - Create `TaskContext` with correlation ID, variables, and response sender
+   - Call `handler.execute(context)`
+   - Handler calls `context.complete()` or `context.error()`
+   - Message is ACKed
    - On unexpected exception: `basicNack` + log error
-5. **Application shutdown** → graceful shutdown of consumers via `SmartLifecycle.stop()`
+5. **Shutdown** — graceful cancel of all consumers, close connection
 
----
-
-## Module File Structure
+### Module structure
 
 ```
 worker-spring-boot-starter/
 ├── build.gradle.kts
-└── src/
-    ├── main/
-    │   ├── java/uz/salvadore/processengine/worker/
-    │   │   ├── annotation/
-    │   │   │   └── TaskHandler.java
-    │   │   ├── TaskContext.java
-    │   │   ├── TaskExecutionException.java
-    │   │   ├── registry/
-    │   │   │   ├── TaskHandlerRegistry.java
-    │   │   │   └── TaskHandlerBeanPostProcessor.java
-    │   │   ├── listener/
-    │   │   │   └── TaskListenerContainer.java
-    │   │   └── autoconfigure/
-    │   │       ├── WorkerAutoConfiguration.java
-    │   │       ├── WorkerProperties.java
-    │   │       └── WorkerHealthIndicator.java
-    │   └── resources/
-    │       └── META-INF/spring/
-    │           └── org.springframework.boot.autoconfigure.AutoConfiguration.imports
-    └── test/
-        └── java/uz/salvadore/processengine/worker/
-            └── ... (tests with Testcontainers + RabbitMQ)
+└── src/main/java/uz/salvadore/processengine/worker/
+    ├── ExternalTaskHandler.java
+    ├── TaskContext.java
+    ├── TaskExecutionException.java
+    ├── annotation/
+    │   └── JobWorker.java
+    ├── registry/
+    │   ├── TaskHandlerRegistry.java
+    │   └── TaskHandlerBeanPostProcessor.java
+    ├── listener/
+    │   └── TaskListenerContainer.java
+    └── autoconfigure/
+        ├── WorkerAutoConfiguration.java
+        ├── WorkerProperties.java
+        └── WorkerHealthIndicator.java
 ```
 
 ---
 
-## Dependencies (`build.gradle.kts`)
+## Dependencies
 
 ```kotlin
-plugins {
-    id("java-library")
-}
-
 dependencies {
     implementation(libs.rabbitmq.client)
     implementation(libs.jackson.databind)
@@ -173,13 +208,7 @@ dependencies {
     implementation(libs.spring.boot.autoconfigure)
     implementation(libs.spring.boot.actuator)
     implementation(libs.slf4j.api)
-
     annotationProcessor(libs.spring.boot.configuration.processor)
-
-    testImplementation(libs.spring.boot.starter.test)
-    testImplementation(platform(libs.testcontainers.bom))
-    testImplementation(libs.testcontainers.junit5)
-    testImplementation(libs.testcontainers.rabbitmq)
 }
 ```
 
