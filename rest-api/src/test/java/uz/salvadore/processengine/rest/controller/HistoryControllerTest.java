@@ -10,7 +10,7 @@ import uz.salvadore.processengine.core.domain.event.ProcessEvent;
 import uz.salvadore.processengine.core.domain.event.ProcessStartedEvent;
 import uz.salvadore.processengine.core.domain.event.TaskCompletedEvent;
 import uz.salvadore.processengine.core.domain.event.TokenMovedEvent;
-import uz.salvadore.processengine.core.engine.ProcessDefinitionRepository;
+import uz.salvadore.processengine.core.port.outgoing.ProcessDefinitionStore;
 import uz.salvadore.processengine.core.engine.ProcessEngine;
 import uz.salvadore.processengine.core.parser.BpmnParser;
 import uz.salvadore.processengine.core.port.outgoing.ProcessEventStore;
@@ -41,7 +41,7 @@ class HistoryControllerTest {
     private ProcessEngine processEngine;
 
     @MockBean
-    private ProcessDefinitionRepository definitionRepository;
+    private ProcessDefinitionStore definitionRepository;
 
     @MockBean
     private BpmnParser bpmnParser;

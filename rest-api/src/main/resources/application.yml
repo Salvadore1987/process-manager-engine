@@ -16,8 +16,6 @@ spring:
           issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/process-engine}
 
 process-engine:
-  persistence:
-    enabled: ${PROCESS_ENGINE_PERSISTENCE_ENABLED:true}
   rabbitmq:
     host: ${PROCESS_ENGINE_RABBITMQ_HOST:localhost}
     port: ${PROCESS_ENGINE_RABBITMQ_PORT:5672}

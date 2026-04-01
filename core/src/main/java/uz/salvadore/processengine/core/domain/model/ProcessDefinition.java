@@ -1,5 +1,7 @@
 package uz.salvadore.processengine.core.domain.model;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import uz.salvadore.processengine.core.domain.enums.NodeType;
 import uz.salvadore.processengine.core.util.UUIDv7;
 
@@ -37,9 +39,15 @@ public final class ProcessDefinition {
                 flowNodes, sequenceFlows, Instant.now());
     }
 
-    public static ProcessDefinition restore(UUID id, String key, int version, String name, String bpmnXml,
-                                            List<FlowNode> flowNodes, List<SequenceFlow> sequenceFlows,
-                                            Instant deployedAt) {
+    @JsonCreator
+    public static ProcessDefinition restore(@JsonProperty("id") UUID id,
+                                            @JsonProperty("key") String key,
+                                            @JsonProperty("version") int version,
+                                            @JsonProperty("name") String name,
+                                            @JsonProperty("bpmnXml") String bpmnXml,
+                                            @JsonProperty("flowNodes") List<FlowNode> flowNodes,
+                                            @JsonProperty("sequenceFlows") List<SequenceFlow> sequenceFlows,
+                                            @JsonProperty("deployedAt") Instant deployedAt) {
         return new ProcessDefinition(id, key, version, name, bpmnXml, flowNodes, sequenceFlows, deployedAt);
     }
 

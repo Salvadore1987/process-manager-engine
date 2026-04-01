@@ -10,19 +10,21 @@ import uz.salvadore.processengine.core.domain.model.ProcessDefinition;
 import uz.salvadore.processengine.core.domain.model.SequenceFlow;
 import uz.salvadore.processengine.core.domain.model.StartEvent;
 
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessDefinitionStore;
+
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class ProcessDefinitionRepositoryTest {
+class InMemoryProcessDefinitionStoreTest {
 
-    private ProcessDefinitionRepository repository;
+    private InMemoryProcessDefinitionStore definitionStore;
 
     @BeforeEach
     void setUp() {
-        repository = new ProcessDefinitionRepository();
+        definitionStore = new InMemoryProcessDefinitionStore();
     }
 
     private ProcessDefinition createDefinition(String key, String bpmnXml) {
@@ -44,10 +46,10 @@ class ProcessDefinitionRepositoryTest {
             ProcessDefinition definition = createDefinition("order-process", "<xml/>");
 
             // Act
-            ProcessDefinition deployed = repository.deploy(definition);
+            ProcessDefinition deployed = definitionStore.deploy(definition);
 
             // Assert
-            Optional<ProcessDefinition> found = repository.getById(deployed.getId());
+            Optional<ProcessDefinition> found = definitionStore.getById(deployed.getId());
             assertThat(found).isPresent();
             assertThat(found.get().getKey()).isEqualTo("order-process");
             assertThat(found.get().getVersion()).isEqualTo(1);
@@ -61,11 +63,11 @@ class ProcessDefinitionRepositoryTest {
             ProcessDefinition v2 = createDefinition("order-process", "<xml v2/>");
 
             // Act
-            repository.deploy(v1);
-            repository.deploy(v2);
+            definitionStore.deploy(v1);
+            definitionStore.deploy(v2);
 
             // Assert
-            assertThat(repository.getVersions("order-process")).hasSize(2);
+            assertThat(definitionStore.getVersions("order-process")).hasSize(2);
         }
 
         @Test
@@ -75,7 +77,7 @@ class ProcessDefinitionRepositoryTest {
             ProcessDefinition definition = createDefinition("order-process", "<xml/>");
 
             // Act
-            ProcessDefinition deployed = repository.deploy(definition);
+            ProcessDefinition deployed = definitionStore.deploy(definition);
 
             // Assert
             assertThat(deployed.getVersion()).isEqualTo(1);
@@ -90,9 +92,9 @@ class ProcessDefinitionRepositoryTest {
             ProcessDefinition v3 = createDefinition("order-process", "<xml v3/>");
 
             // Act
-            ProcessDefinition deployed1 = repository.deploy(v1);
-            ProcessDefinition deployed2 = repository.deploy(v2);
-            ProcessDefinition deployed3 = repository.deploy(v3);
+            ProcessDefinition deployed1 = definitionStore.deploy(v1);
+            ProcessDefinition deployed2 = definitionStore.deploy(v2);
+            ProcessDefinition deployed3 = definitionStore.deploy(v3);
 
             // Assert
             assertThat(deployed1.getVersion()).isEqualTo(1);
@@ -106,10 +108,10 @@ class ProcessDefinitionRepositoryTest {
             // Arrange
             ProcessDefinition first = createDefinition("order-process", "<xml/>");
             ProcessDefinition duplicate = createDefinition("order-process", "<xml/>");
-            repository.deploy(first);
+            definitionStore.deploy(first);
 
             // Act & Assert
-            assertThatThrownBy(() -> repository.deploy(duplicate))
+            assertThatThrownBy(() -> definitionStore.deploy(duplicate))
                     .isInstanceOf(DuplicateProcessDefinitionException.class)
                     .hasMessageContaining("order-process");
         }
@@ -121,13 +123,13 @@ class ProcessDefinitionRepositoryTest {
             ProcessDefinition v1 = createDefinition("order-process", "<xml v1/>");
             ProcessDefinition duplicate = createDefinition("order-process", "<xml v1/>");
             ProcessDefinition v2 = createDefinition("order-process", "<xml v2/>");
-            repository.deploy(v1);
+            definitionStore.deploy(v1);
 
             // Act & Assert
-            assertThatThrownBy(() -> repository.deploy(duplicate))
+            assertThatThrownBy(() -> definitionStore.deploy(duplicate))
                     .isInstanceOf(DuplicateProcessDefinitionException.class);
 
-            ProcessDefinition deployed = repository.deploy(v2);
+            ProcessDefinition deployed = definitionStore.deploy(v2);
             assertThat(deployed.getVersion()).isEqualTo(2);
         }
 
@@ -138,7 +140,7 @@ class ProcessDefinitionRepositoryTest {
             ProcessDefinition definition = createDefinition("order-process", "<xml/>");
 
             // Act
-            ProcessDefinition deployed = repository.deploy(definition);
+            ProcessDefinition deployed = definitionStore.deploy(definition);
 
             // Assert
             assertThat(deployed.getVersion()).isEqualTo(1);
@@ -157,16 +159,16 @@ class ProcessDefinitionRepositoryTest {
             // Arrange
             ProcessDefinition v1 = createDefinition("order-process", "<xml v1/>");
             ProcessDefinition v2 = createDefinition("order-process", "<xml v2/>");
-            ProcessDefinition deployed1 = repository.deploy(v1);
-            ProcessDefinition deployed2 = repository.deploy(v2);
+            ProcessDefinition deployed1 = definitionStore.deploy(v1);
+            ProcessDefinition deployed2 = definitionStore.deploy(v2);
 
             // Act
-            repository.undeploy("order-process");
+            definitionStore.undeploy("order-process");
 
             // Assert
-            assertThat(repository.getByKey("order-process")).isEmpty();
-            assertThat(repository.getById(deployed1.getId())).isEmpty();
-            assertThat(repository.getById(deployed2.getId())).isEmpty();
+            assertThat(definitionStore.getByKey("order-process")).isEmpty();
+            assertThat(definitionStore.getById(deployed1.getId())).isEmpty();
+            assertThat(definitionStore.getById(deployed2.getId())).isEmpty();
         }
 
         @Test
@@ -175,21 +177,21 @@ class ProcessDefinitionRepositoryTest {
             // Arrange
             ProcessDefinition orderDef = createDefinition("order-process", "<xml order/>");
             ProcessDefinition paymentDef = createDefinition("payment-process", "<xml payment/>");
-            repository.deploy(orderDef);
-            repository.deploy(paymentDef);
+            definitionStore.deploy(orderDef);
+            definitionStore.deploy(paymentDef);
 
             // Act
-            repository.undeploy("order-process");
+            definitionStore.undeploy("order-process");
 
             // Assert
-            assertThat(repository.getByKey("payment-process")).isPresent();
+            assertThat(definitionStore.getByKey("payment-process")).isPresent();
         }
 
         @Test
         @DisplayName("Should handle undeploy of non-existent key gracefully")
         void shouldHandleUndeployOfNonExistentKey() {
             // Act & Assert - should not throw
-            repository.undeploy("non-existent");
+            definitionStore.undeploy("non-existent");
         }
     }
 
@@ -201,7 +203,7 @@ class ProcessDefinitionRepositoryTest {
         @DisplayName("Should return empty when id not found")
         void shouldReturnEmptyWhenNotFound() {
             // Act
-            Optional<ProcessDefinition> result = repository.getById(java.util.UUID.randomUUID());
+            Optional<ProcessDefinition> result = definitionStore.getById(java.util.UUID.randomUUID());
 
             // Assert
             assertThat(result).isEmpty();
@@ -216,12 +218,12 @@ class ProcessDefinitionRepositoryTest {
         @DisplayName("Should return latest version for key")
         void shouldReturnLatestVersion() {
             // Arrange
-            repository.deploy(createDefinition("order-process", "<xml v1/>"));
-            repository.deploy(createDefinition("order-process", "<xml v2/>"));
-            repository.deploy(createDefinition("order-process", "<xml v3/>"));
+            definitionStore.deploy(createDefinition("order-process", "<xml v1/>"));
+            definitionStore.deploy(createDefinition("order-process", "<xml v2/>"));
+            definitionStore.deploy(createDefinition("order-process", "<xml v3/>"));
 
             // Act
-            Optional<ProcessDefinition> latest = repository.getByKey("order-process");
+            Optional<ProcessDefinition> latest = definitionStore.getByKey("order-process");
 
             // Assert
             assertThat(latest).isPresent();
@@ -232,7 +234,7 @@ class ProcessDefinitionRepositoryTest {
         @DisplayName("Should return empty when key not found")
         void shouldReturnEmptyWhenKeyNotFound() {
             // Act
-            Optional<ProcessDefinition> result = repository.getByKey("non-existent");
+            Optional<ProcessDefinition> result = definitionStore.getByKey("non-existent");
 
             // Assert
             assertThat(result).isEmpty();
@@ -247,11 +249,11 @@ class ProcessDefinitionRepositoryTest {
         @DisplayName("Should return all versions for key")
         void shouldReturnAllVersions() {
             // Arrange
-            repository.deploy(createDefinition("order-process", "<xml v1/>"));
-            repository.deploy(createDefinition("order-process", "<xml v2/>"));
+            definitionStore.deploy(createDefinition("order-process", "<xml v1/>"));
+            definitionStore.deploy(createDefinition("order-process", "<xml v2/>"));
 
             // Act
-            List<ProcessDefinition> versions = repository.getVersions("order-process");
+            List<ProcessDefinition> versions = definitionStore.getVersions("order-process");
 
             // Assert
             assertThat(versions).hasSize(2);
@@ -261,7 +263,7 @@ class ProcessDefinitionRepositoryTest {
         @DisplayName("Should return empty list for non-existent key")
         void shouldReturnEmptyListForNonExistentKey() {
             // Act
-            List<ProcessDefinition> versions = repository.getVersions("non-existent");
+            List<ProcessDefinition> versions = definitionStore.getVersions("non-existent");
 
             // Assert
             assertThat(versions).isEmpty();
@@ -276,11 +278,11 @@ class ProcessDefinitionRepositoryTest {
         @DisplayName("Should return all deployed definitions")
         void shouldReturnAllDefinitions() {
             // Arrange
-            repository.deploy(createDefinition("order-process", "<xml order/>"));
-            repository.deploy(createDefinition("payment-process", "<xml payment/>"));
+            definitionStore.deploy(createDefinition("order-process", "<xml order/>"));
+            definitionStore.deploy(createDefinition("payment-process", "<xml payment/>"));
 
             // Act
-            List<ProcessDefinition> all = repository.list();
+            List<ProcessDefinition> all = definitionStore.list();
 
             // Assert
             assertThat(all).hasSize(2);
@@ -290,7 +292,7 @@ class ProcessDefinitionRepositoryTest {
         @DisplayName("Should return empty list when no definitions deployed")
         void shouldReturnEmptyListWhenEmpty() {
             // Act
-            List<ProcessDefinition> all = repository.list();
+            List<ProcessDefinition> all = definitionStore.list();
 
             // Assert
             assertThat(all).isEmpty();
@@ -309,7 +311,7 @@ class ProcessDefinitionRepositoryTest {
             int index = i + 1;
             threads[i] = new Thread(() -> {
                 ProcessDefinition definition = createDefinition("concurrent-process", "<xml v" + index + "/>");
-                repository.deploy(definition);
+                definitionStore.deploy(definition);
             });
             threads[i].start();
         }
@@ -319,7 +321,7 @@ class ProcessDefinitionRepositoryTest {
         }
 
         // Assert
-        assertThat(repository.getVersions("concurrent-process")).hasSize(threadCount);
-        assertThat(repository.size()).isEqualTo(threadCount);
+        assertThat(definitionStore.getVersions("concurrent-process")).hasSize(threadCount);
+        assertThat(definitionStore.size()).isEqualTo(threadCount);
     }
 }

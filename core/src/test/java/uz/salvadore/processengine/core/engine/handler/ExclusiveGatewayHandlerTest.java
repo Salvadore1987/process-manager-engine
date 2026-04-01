@@ -17,7 +17,7 @@ import uz.salvadore.processengine.core.domain.model.StartEvent;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.condition.SimpleConditionEvaluator;
 import uz.salvadore.processengine.core.engine.context.ExecutionContext;
-import uz.salvadore.processengine.core.engine.eventsourcing.EventSequencer;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemorySequenceGenerator;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -31,8 +31,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ExclusiveGatewayHandlerTest {
 
     private final SimpleConditionEvaluator conditionEvaluator = new SimpleConditionEvaluator();
-    private final EventSequencer eventSequencer = new EventSequencer();
-    private final ExclusiveGatewayHandler handler = new ExclusiveGatewayHandler(conditionEvaluator, eventSequencer);
+    private final InMemorySequenceGenerator sequenceGenerator = new InMemorySequenceGenerator();
+    private final ExclusiveGatewayHandler handler = new ExclusiveGatewayHandler(conditionEvaluator, sequenceGenerator);
 
     @Nested
     @DisplayName("Condition-based routing")

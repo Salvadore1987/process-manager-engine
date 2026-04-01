@@ -13,7 +13,7 @@ import uz.salvadore.processengine.core.domain.model.SequenceFlow;
 import uz.salvadore.processengine.core.domain.model.StartEvent;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.context.ExecutionContext;
-import uz.salvadore.processengine.core.engine.eventsourcing.EventSequencer;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemorySequenceGenerator;
 
 import java.time.Instant;
 import java.util.List;
@@ -24,8 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class CompensationBoundaryEventHandlerTest {
 
-    private final EventSequencer eventSequencer = new EventSequencer();
-    private final CompensationBoundaryEventHandler handler = new CompensationBoundaryEventHandler(eventSequencer);
+    private final InMemorySequenceGenerator sequenceGenerator = new InMemorySequenceGenerator();
+    private final CompensationBoundaryEventHandler handler = new CompensationBoundaryEventHandler(sequenceGenerator);
 
     @Test
     @DisplayName("Should emit CompensationTriggeredEvent with attachedToRef and compensation task id")

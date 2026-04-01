@@ -22,10 +22,12 @@ import uz.salvadore.processengine.core.domain.model.SequenceFlow;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.context.ExecutionContext;
 import uz.salvadore.processengine.core.engine.eventsourcing.EventApplier;
-import uz.salvadore.processengine.core.engine.eventsourcing.EventSequencer;
 import uz.salvadore.processengine.core.engine.eventsourcing.ProcessInstanceProjection;
 import uz.salvadore.processengine.core.port.outgoing.DeploymentListener;
+import uz.salvadore.processengine.core.port.outgoing.InstanceDefinitionMapping;
+import uz.salvadore.processengine.core.port.outgoing.ProcessDefinitionStore;
 import uz.salvadore.processengine.core.port.outgoing.ProcessEventStore;
+import uz.salvadore.processengine.core.port.outgoing.SequenceGenerator;
 import uz.salvadore.processengine.core.util.UUIDv7;
 
 import java.time.Instant;
@@ -34,7 +36,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Main facade for the process engine. Orchestrates process lifecycle:
@@ -44,38 +45,40 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class ProcessEngine {
 
     private final ProcessEventStore eventStore;
-    private final ProcessDefinitionRepository definitionRepository;
+    private final ProcessDefinitionStore definitionStore;
     private final TokenExecutor tokenExecutor;
-    private final EventSequencer eventSequencer;
+    private final SequenceGenerator sequenceGenerator;
+    private final InstanceDefinitionMapping instanceDefinitionMapping;
     private final EventApplier eventApplier;
     private final ProcessInstanceProjection projection;
     private final List<DeploymentListener> deploymentListeners;
-    private final ConcurrentHashMap<UUID, UUID> instanceDefinitionMap = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<UUID, Object> instanceLocks = new ConcurrentHashMap<>();
 
     public ProcessEngine(ProcessEventStore eventStore,
-                         ProcessDefinitionRepository definitionRepository,
+                         ProcessDefinitionStore definitionStore,
                          TokenExecutor tokenExecutor,
-                         EventSequencer eventSequencer) {
-        this(eventStore, definitionRepository, tokenExecutor, eventSequencer, List.of());
+                         SequenceGenerator sequenceGenerator,
+                         InstanceDefinitionMapping instanceDefinitionMapping) {
+        this(eventStore, definitionStore, tokenExecutor, sequenceGenerator, instanceDefinitionMapping, List.of());
     }
 
     public ProcessEngine(ProcessEventStore eventStore,
-                         ProcessDefinitionRepository definitionRepository,
+                         ProcessDefinitionStore definitionStore,
                          TokenExecutor tokenExecutor,
-                         EventSequencer eventSequencer,
+                         SequenceGenerator sequenceGenerator,
+                         InstanceDefinitionMapping instanceDefinitionMapping,
                          List<DeploymentListener> deploymentListeners) {
         this.eventStore = eventStore;
-        this.definitionRepository = definitionRepository;
+        this.definitionStore = definitionStore;
         this.tokenExecutor = tokenExecutor;
-        this.eventSequencer = eventSequencer;
+        this.sequenceGenerator = sequenceGenerator;
+        this.instanceDefinitionMapping = instanceDefinitionMapping;
         this.eventApplier = new EventApplier();
         this.projection = new ProcessInstanceProjection(eventApplier);
         this.deploymentListeners = deploymentListeners;
     }
 
     public ProcessDefinition deploy(ProcessDefinition definition) {
-        ProcessDefinition deployed = definitionRepository.deploy(definition);
+        ProcessDefinition deployed = definitionStore.deploy(definition);
         for (DeploymentListener listener : deploymentListeners) {
             listener.onDeploy(deployed);
         }
@@ -83,7 +86,7 @@ public final class ProcessEngine {
     }
 
     public ProcessInstance startProcess(String definitionKey, Map<String, Object> variables) {
-        ProcessDefinition definition = definitionRepository.getByKey(definitionKey)
+        ProcessDefinition definition = definitionStore.getByKey(definitionKey)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Process definition not found: " + definitionKey));
 
@@ -97,14 +100,14 @@ public final class ProcessEngine {
                 null,
                 processVariables,
                 Instant.now(),
-                eventSequencer.next(processInstanceId)
+                sequenceGenerator.next(processInstanceId)
         );
 
         List<ProcessEvent> allEvents = new ArrayList<>();
         allEvents.add(startedEvent);
 
         ProcessInstance instance = eventApplier.apply(startedEvent, null);
-        instanceDefinitionMap.put(processInstanceId, definition.getId());
+        instanceDefinitionMapping.put(processInstanceId, definition.getId());
 
         Token startToken = instance.getTokens().getFirst();
         FlowNode startNode = findStartEvent(definition);
@@ -125,140 +128,133 @@ public final class ProcessEngine {
 
     public ProcessInstance completeTask(UUID correlationId, Map<String, Object> result) {
         UUID processInstanceId = findProcessInstanceByTokenId(correlationId);
-        Object lock = instanceLocks.computeIfAbsent(processInstanceId, k -> new Object());
-        synchronized (lock) {
-            ProcessDefinition definition = getDefinitionForInstance(processInstanceId);
-            ProcessInstance instance = getProcessInstance(processInstanceId);
+        ProcessDefinition definition = getDefinitionForInstance(processInstanceId);
+        ProcessInstance instance = getProcessInstance(processInstanceId);
 
-            Token token = instance.getTokens().stream()
-                    .filter(t -> t.getId().equals(correlationId))
-                    .filter(t -> t.getState() == TokenState.WAITING || t.getState() == TokenState.ACTIVE)
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalStateException(
-                            "No active/waiting token found with id: " + correlationId));
+        Token token = instance.getTokens().stream()
+                .filter(t -> t.getId().equals(correlationId))
+                .filter(t -> t.getState() == TokenState.WAITING || t.getState() == TokenState.ACTIVE)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "No active/waiting token found with id: " + correlationId));
 
-            List<ProcessEvent> allEvents = new ArrayList<>();
+        List<ProcessEvent> allEvents = new ArrayList<>();
 
-            TaskCompletedEvent completedEvent = new TaskCompletedEvent(
+        TaskCompletedEvent completedEvent = new TaskCompletedEvent(
+                UUIDv7.generate(),
+                processInstanceId,
+                token.getId(),
+                token.getCurrentNodeId(),
+                result,
+                Instant.now(),
+                sequenceGenerator.next(processInstanceId)
+        );
+        allEvents.add(completedEvent);
+        instance = eventApplier.apply(completedEvent, instance);
+
+        FlowNode currentNode = findNodeById(definition, token.getCurrentNodeId());
+        List<SequenceFlow> outgoingFlows = definition.getSequenceFlows().stream()
+                .filter(f -> f.sourceRef().equals(currentNode.id()))
+                .toList();
+
+        if (!outgoingFlows.isEmpty()) {
+            SequenceFlow nextFlow = outgoingFlows.getFirst();
+            TokenMovedEvent movedEvent = new TokenMovedEvent(
                     UUIDv7.generate(),
                     processInstanceId,
                     token.getId(),
-                    token.getCurrentNodeId(),
-                    result,
+                    currentNode.id(),
+                    nextFlow.targetRef(),
                     Instant.now(),
-                    eventSequencer.next(processInstanceId)
+                    sequenceGenerator.next(processInstanceId)
             );
-            allEvents.add(completedEvent);
-            instance = eventApplier.apply(completedEvent, instance);
-
-            FlowNode currentNode = findNodeById(definition, token.getCurrentNodeId());
-            List<SequenceFlow> outgoingFlows = definition.getSequenceFlows().stream()
-                    .filter(f -> f.sourceRef().equals(currentNode.id()))
-                    .toList();
-
-            if (!outgoingFlows.isEmpty()) {
-                SequenceFlow nextFlow = outgoingFlows.getFirst();
-                TokenMovedEvent movedEvent = new TokenMovedEvent(
-                        UUIDv7.generate(),
-                        processInstanceId,
-                        token.getId(),
-                        currentNode.id(),
-                        nextFlow.targetRef(),
-                        Instant.now(),
-                        eventSequencer.next(processInstanceId)
-                );
-                allEvents.add(movedEvent);
-                instance = eventApplier.apply(movedEvent, instance);
-            }
-
-            instance = advanceActiveTokens(instance, definition, allEvents);
-
-            eventStore.appendAll(allEvents);
-            return instance;
+            allEvents.add(movedEvent);
+            instance = eventApplier.apply(movedEvent, instance);
         }
+
+        instance = advanceActiveTokens(instance, definition, allEvents);
+
+        eventStore.appendAll(allEvents);
+        return instance;
     }
 
     public ProcessInstance failTask(UUID correlationId, String errorCode, String errorMessage) {
         UUID processInstanceId = findProcessInstanceByTokenId(correlationId);
-        Object lock = instanceLocks.computeIfAbsent(processInstanceId, k -> new Object());
-        synchronized (lock) {
-            ProcessDefinition definition = getDefinitionForInstance(processInstanceId);
-            ProcessInstance instance = getProcessInstance(processInstanceId);
+        ProcessDefinition definition = getDefinitionForInstance(processInstanceId);
+        ProcessInstance instance = getProcessInstance(processInstanceId);
 
-            Token token = instance.getTokens().stream()
-                    .filter(t -> t.getId().equals(correlationId))
-                    .filter(t -> t.getState() == TokenState.WAITING || t.getState() == TokenState.ACTIVE)
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalStateException(
-                            "No active/waiting token found with id: " + correlationId));
+        Token token = instance.getTokens().stream()
+                .filter(t -> t.getId().equals(correlationId))
+                .filter(t -> t.getState() == TokenState.WAITING || t.getState() == TokenState.ACTIVE)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "No active/waiting token found with id: " + correlationId));
 
-            String currentNodeId = token.getCurrentNodeId();
-            List<ProcessEvent> allEvents = new ArrayList<>();
+        String currentNodeId = token.getCurrentNodeId();
+        List<ProcessEvent> allEvents = new ArrayList<>();
 
-            // Look for ErrorBoundaryEvent attached to the current task
-            ErrorBoundaryEvent errorBoundary = findErrorBoundary(definition, currentNodeId, errorCode);
+        // Look for ErrorBoundaryEvent attached to the current task
+        ErrorBoundaryEvent errorBoundary = findErrorBoundary(definition, currentNodeId, errorCode);
 
-            if (errorBoundary != null) {
-                // Route token through the error boundary flow
-                TokenMovedEvent movedEvent = new TokenMovedEvent(
-                        UUIDv7.generate(),
-                        processInstanceId,
-                        token.getId(),
-                        currentNodeId,
-                        errorBoundary.id(),
-                        Instant.now(),
-                        eventSequencer.next(processInstanceId)
-                );
-                allEvents.add(movedEvent);
-                instance = eventApplier.apply(movedEvent, instance);
+        if (errorBoundary != null) {
+            // Route token through the error boundary flow
+            TokenMovedEvent movedEvent = new TokenMovedEvent(
+                    UUIDv7.generate(),
+                    processInstanceId,
+                    token.getId(),
+                    currentNodeId,
+                    errorBoundary.id(),
+                    Instant.now(),
+                    sequenceGenerator.next(processInstanceId)
+            );
+            allEvents.add(movedEvent);
+            instance = eventApplier.apply(movedEvent, instance);
 
-                ExecutionContext context = new ExecutionContext(instance, definition);
-                List<ProcessEvent> boundaryEvents = tokenExecutor.execute(
-                        Token.restore(token.getId(), errorBoundary.id(), TokenState.ACTIVE),
-                        errorBoundary, context);
-                allEvents.addAll(boundaryEvents);
-                for (ProcessEvent event : boundaryEvents) {
-                    instance = eventApplier.apply(event, instance);
-                }
-
-                instance = advanceActiveTokens(instance, definition, allEvents);
-            } else {
-                // Mark the failed token as COMPLETED so it won't be re-executed after event replay
-                TaskCompletedEvent failedTokenCompleted = new TaskCompletedEvent(
-                        UUIDv7.generate(),
-                        processInstanceId,
-                        token.getId(),
-                        currentNodeId,
-                        null,
-                        Instant.now(),
-                        eventSequencer.next(processInstanceId)
-                );
-                allEvents.add(failedTokenCompleted);
-                instance = eventApplier.apply(failedTokenCompleted, instance);
-
-                // No error boundary — trigger compensation for completed tasks, then error
-                instance = triggerCompensation(instance, definition, allEvents);
-
-                ProcessErrorEvent processError = new ProcessErrorEvent(
-                        UUIDv7.generate(),
-                        processInstanceId,
-                        errorCode,
-                        errorMessage,
-                        Instant.now(),
-                        eventSequencer.next(processInstanceId)
-                );
-                allEvents.add(processError);
-                instance = eventApplier.apply(processError, instance);
+            ExecutionContext context = new ExecutionContext(instance, definition);
+            List<ProcessEvent> boundaryEvents = tokenExecutor.execute(
+                    Token.restore(token.getId(), errorBoundary.id(), TokenState.ACTIVE),
+                    errorBoundary, context);
+            allEvents.addAll(boundaryEvents);
+            for (ProcessEvent event : boundaryEvents) {
+                instance = eventApplier.apply(event, instance);
             }
 
-            eventStore.appendAll(allEvents);
-            return instance;
+            instance = advanceActiveTokens(instance, definition, allEvents);
+        } else {
+            // Mark the failed token as COMPLETED so it won't be re-executed after event replay
+            TaskCompletedEvent failedTokenCompleted = new TaskCompletedEvent(
+                    UUIDv7.generate(),
+                    processInstanceId,
+                    token.getId(),
+                    currentNodeId,
+                    null,
+                    Instant.now(),
+                    sequenceGenerator.next(processInstanceId)
+            );
+            allEvents.add(failedTokenCompleted);
+            instance = eventApplier.apply(failedTokenCompleted, instance);
+
+            // No error boundary — trigger compensation for completed tasks, then error
+            instance = triggerCompensation(instance, definition, allEvents);
+
+            ProcessErrorEvent processError = new ProcessErrorEvent(
+                    UUIDv7.generate(),
+                    processInstanceId,
+                    errorCode,
+                    errorMessage,
+                    Instant.now(),
+                    sequenceGenerator.next(processInstanceId)
+            );
+            allEvents.add(processError);
+            instance = eventApplier.apply(processError, instance);
         }
+
+        eventStore.appendAll(allEvents);
+        return instance;
     }
 
     public ProcessInstance completeCallActivity(UUID childInstanceId) {
-        for (Map.Entry<UUID, UUID> entry : instanceDefinitionMap.entrySet()) {
-            UUID parentInstanceId = entry.getKey();
+        for (UUID parentInstanceId : instanceDefinitionMapping.allInstanceIds()) {
             ProcessInstance parentInstance = getProcessInstance(parentInstanceId);
             ProcessDefinition definition = getDefinitionForInstance(parentInstanceId);
 
@@ -275,7 +271,7 @@ public final class ProcessEngine {
                                 token.getCurrentNodeId(),
                                 childInstanceId,
                                 Instant.now(),
-                                eventSequencer.next(parentInstanceId)
+                                sequenceGenerator.next(parentInstanceId)
                         );
                         allEvents.add(completedEvent);
                         parentInstance = eventApplier.apply(completedEvent, parentInstance);
@@ -292,7 +288,7 @@ public final class ProcessEngine {
                                     node.id(),
                                     outgoingFlows.getFirst().targetRef(),
                                     Instant.now(),
-                                    eventSequencer.next(parentInstanceId)
+                                    sequenceGenerator.next(parentInstanceId)
                             );
                             allEvents.add(movedEvent);
                             parentInstance = eventApplier.apply(movedEvent, parentInstance);
@@ -318,7 +314,7 @@ public final class ProcessEngine {
                 UUIDv7.generate(),
                 processInstanceId,
                 Instant.now(),
-                eventSequencer.next(processInstanceId)
+                sequenceGenerator.next(processInstanceId)
         );
 
         eventStore.append(event);
@@ -335,7 +331,7 @@ public final class ProcessEngine {
                 UUIDv7.generate(),
                 processInstanceId,
                 Instant.now(),
-                eventSequencer.next(processInstanceId)
+                sequenceGenerator.next(processInstanceId)
         );
 
         eventStore.append(event);
@@ -348,15 +344,14 @@ public final class ProcessEngine {
             throw new IllegalStateException("Cannot terminate process in state " + instance.getState());
         }
 
-        uz.salvadore.processengine.core.domain.event.ProcessErrorEvent event =
-                new uz.salvadore.processengine.core.domain.event.ProcessErrorEvent(
-                        UUIDv7.generate(),
-                        processInstanceId,
-                        "TERMINATED",
-                        "Process terminated by user",
-                        Instant.now(),
-                        eventSequencer.next(processInstanceId)
-                );
+        ProcessErrorEvent event = new ProcessErrorEvent(
+                UUIDv7.generate(),
+                processInstanceId,
+                "TERMINATED",
+                "Process terminated by user",
+                Instant.now(),
+                sequenceGenerator.next(processInstanceId)
+        );
 
         eventStore.append(event);
         return eventApplier.apply(event, instance);
@@ -389,8 +384,6 @@ public final class ProcessEngine {
                     continue;
                 }
 
-                // ServiceTask and CallActivity: execute handler (sends message / starts child),
-                // then set the token to WAITING and stop advancing this token
                 if (node.type() == NodeType.SERVICE_TASK || node.type() == NodeType.CALL_ACTIVITY) {
                     ExecutionContext context = new ExecutionContext(instance, definition);
                     List<ProcessEvent> events = tokenExecutor.execute(token, node, context);
@@ -400,14 +393,13 @@ public final class ProcessEngine {
                             instance = eventApplier.apply(event, instance);
                         }
                     } else {
-                        // ServiceTask returns empty events — persist token WAITING state
                         TokenWaitingEvent waitingEvent = new TokenWaitingEvent(
                                 UUIDv7.generate(),
                                 instance.getId(),
                                 token.getId(),
                                 token.getCurrentNodeId(),
                                 Instant.now(),
-                                eventSequencer.next(instance.getId())
+                                sequenceGenerator.next(instance.getId())
                         );
                         allEvents.add(waitingEvent);
                         instance = eventApplier.apply(waitingEvent, instance);
@@ -447,7 +439,6 @@ public final class ProcessEngine {
     private ProcessInstance triggerCompensation(ProcessInstance instance,
                                                 ProcessDefinition definition,
                                                 List<ProcessEvent> allEvents) {
-        // Find completed task nodes from event history (not from tokens — tokens move forward after completion)
         List<ProcessEvent> historicEvents = eventStore.getEvents(instance.getId());
         List<String> completedTaskNodeIds = new ArrayList<>();
         for (ProcessEvent event : historicEvents) {
@@ -456,14 +447,12 @@ public final class ProcessEngine {
             }
         }
 
-        // Also check events accumulated in current transaction (not yet persisted)
         for (ProcessEvent event : allEvents) {
             if (event instanceof TaskCompletedEvent taskCompleted) {
                 completedTaskNodeIds.add(taskCompleted.nodeId());
             }
         }
 
-        // Collect compensation boundary events for completed tasks
         List<CompensationBoundaryEvent> compensationEvents = new ArrayList<>();
         for (String nodeId : completedTaskNodeIds) {
             definition.getFlowNodes().stream()
@@ -474,7 +463,6 @@ public final class ProcessEngine {
                     .ifPresent(compensationEvents::add);
         }
 
-        // Reverse to compensate in LIFO order
         List<CompensationBoundaryEvent> reversed = new ArrayList<>(compensationEvents);
         java.util.Collections.reverse(reversed);
 
@@ -493,17 +481,15 @@ public final class ProcessEngine {
                     compensation.attachedToRef(),
                     compensationTaskId,
                     Instant.now(),
-                    eventSequencer.next(instance.getId())
+                    sequenceGenerator.next(instance.getId())
             );
             allEvents.add(triggeredEvent);
             instance = eventApplier.apply(triggeredEvent, instance);
 
-            // Execute the compensation task: register token in instance, then send via handler
             if (compensationTaskId != null) {
                 FlowNode compensationTask = findNodeById(definition, compensationTaskId);
                 Token compensationToken = Token.create(compensationTaskId);
 
-                // Register the compensation token in the instance via TokenMovedEvent
                 TokenMovedEvent tokenEvent = new TokenMovedEvent(
                         UUIDv7.generate(),
                         instance.getId(),
@@ -511,12 +497,11 @@ public final class ProcessEngine {
                         null,
                         compensationTaskId,
                         Instant.now(),
-                        eventSequencer.next(instance.getId())
+                        sequenceGenerator.next(instance.getId())
                 );
                 allEvents.add(tokenEvent);
                 instance = eventApplier.apply(tokenEvent, instance);
 
-                // Execute handler (sends message to RabbitMQ)
                 ExecutionContext context = new ExecutionContext(instance, definition);
                 List<ProcessEvent> taskEvents = tokenExecutor.execute(compensationToken, compensationTask, context);
                 allEvents.addAll(taskEvents);
@@ -524,14 +509,13 @@ public final class ProcessEngine {
                     instance = eventApplier.apply(event, instance);
                 }
 
-                // Set compensation token to WAITING (ServiceTaskHandler returns empty events)
                 TokenWaitingEvent waitingEvent = new TokenWaitingEvent(
                         UUIDv7.generate(),
                         instance.getId(),
                         compensationToken.getId(),
                         compensationTaskId,
                         Instant.now(),
-                        eventSequencer.next(instance.getId())
+                        sequenceGenerator.next(instance.getId())
                 );
                 allEvents.add(waitingEvent);
                 instance = eventApplier.apply(waitingEvent, instance);
@@ -556,7 +540,7 @@ public final class ProcessEngine {
     }
 
     private UUID findProcessInstanceByTokenId(UUID tokenId) {
-        for (UUID instanceId : instanceDefinitionMap.keySet()) {
+        for (UUID instanceId : instanceDefinitionMapping.allInstanceIds()) {
             List<ProcessEvent> events = eventStore.getEvents(instanceId);
             if (!events.isEmpty()) {
                 ProcessInstance instance = projection.replay(events);
@@ -571,11 +555,11 @@ public final class ProcessEngine {
     }
 
     private ProcessDefinition getDefinitionForInstance(UUID processInstanceId) {
-        UUID definitionId = instanceDefinitionMap.get(processInstanceId);
+        UUID definitionId = instanceDefinitionMapping.get(processInstanceId);
         if (definitionId == null) {
             throw new IllegalStateException("Definition not found for instance: " + processInstanceId);
         }
-        return definitionRepository.getById(definitionId)
+        return definitionStore.getById(definitionId)
                 .orElseThrow(() -> new IllegalStateException(
                         "Process definition not found: " + definitionId));
     }

@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import uz.salvadore.processengine.core.domain.model.ProcessDefinition;
-import uz.salvadore.processengine.core.engine.ProcessDefinitionRepository;
+import uz.salvadore.processengine.core.port.outgoing.ProcessDefinitionStore;
 import uz.salvadore.processengine.core.engine.ProcessEngine;
 import uz.salvadore.processengine.core.parser.BpmnParser;
 import uz.salvadore.processengine.core.parser.BpmnValidationResult;
@@ -32,16 +32,16 @@ import java.util.List;
 public class ProcessDefinitionController {
 
     private final ProcessEngine processEngine;
-    private final ProcessDefinitionRepository definitionRepository;
+    private final ProcessDefinitionStore definitionStore;
     private final BpmnParser bpmnParser;
     private final ProcessDefinitionDtoMapper mapper;
 
     public ProcessDefinitionController(ProcessEngine processEngine,
-                                       ProcessDefinitionRepository definitionRepository,
+                                       ProcessDefinitionStore definitionStore,
                                        BpmnParser bpmnParser,
                                        ProcessDefinitionDtoMapper mapper) {
         this.processEngine = processEngine;
-        this.definitionRepository = definitionRepository;
+        this.definitionStore = definitionStore;
         this.bpmnParser = bpmnParser;
         this.mapper = mapper;
     }
@@ -78,7 +78,7 @@ public class ProcessDefinitionController {
 
     @GetMapping
     public ResponseEntity<List<ProcessDefinitionDto>> list() {
-        List<ProcessDefinitionDto> definitions = definitionRepository.list().stream()
+        List<ProcessDefinitionDto> definitions = definitionStore.list().stream()
                 .map(mapper::toDto)
                 .toList();
         return ResponseEntity.ok(definitions);
@@ -86,14 +86,14 @@ public class ProcessDefinitionController {
 
     @GetMapping("/{key}")
     public ResponseEntity<ProcessDefinitionDto> getByKey(@PathVariable String key) {
-        ProcessDefinition definition = definitionRepository.getByKey(key)
+        ProcessDefinition definition = definitionStore.getByKey(key)
                 .orElseThrow(() -> new DefinitionNotFoundException(key));
         return ResponseEntity.ok(mapper.toDto(definition));
     }
 
     @GetMapping("/{key}/versions")
     public ResponseEntity<List<ProcessDefinitionDto>> getVersions(@PathVariable String key) {
-        List<ProcessDefinitionDto> versions = definitionRepository.getVersions(key).stream()
+        List<ProcessDefinitionDto> versions = definitionStore.getVersions(key).stream()
                 .map(mapper::toDto)
                 .toList();
         return ResponseEntity.ok(versions);
@@ -101,7 +101,7 @@ public class ProcessDefinitionController {
 
     @DeleteMapping("/{key}")
     public ResponseEntity<Void> undeploy(@PathVariable String key) {
-        definitionRepository.undeploy(key);
+        definitionStore.undeploy(key);
         return ResponseEntity.noContent().build();
     }
 }

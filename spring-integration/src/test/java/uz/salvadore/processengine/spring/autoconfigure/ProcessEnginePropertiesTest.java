@@ -27,16 +27,6 @@ class ProcessEnginePropertiesTest {
     class DefaultValues {
 
         @Test
-        @DisplayName("persistence.enabled defaults to false")
-        void persistenceEnabledDefaultsToFalse() {
-            // Arrange & Act & Assert
-            contextRunner.run(context -> {
-                ProcessEngineProperties properties = context.getBean(ProcessEngineProperties.class);
-                assertThat(properties.getPersistence().isEnabled()).isFalse();
-            });
-        }
-
-        @Test
         @DisplayName("rabbitmq.host defaults to localhost")
         void rabbitmqHostDefaultsToLocalhost() {
             contextRunner.run(context -> {
@@ -128,20 +118,6 @@ class ProcessEnginePropertiesTest {
     class CustomPropertyBinding {
 
         @Test
-        @DisplayName("binds persistence.enabled from properties")
-        void bindsPersistenceEnabled() {
-            // Arrange
-            ApplicationContextRunner runner = contextRunner
-                    .withPropertyValues("process-engine.persistence.enabled=true");
-
-            // Act & Assert
-            runner.run(context -> {
-                ProcessEngineProperties properties = context.getBean(ProcessEngineProperties.class);
-                assertThat(properties.getPersistence().isEnabled()).isTrue();
-            });
-        }
-
-        @Test
         @DisplayName("binds rabbitmq connection properties")
         void bindsRabbitmqConnectionProperties() {
             // Arrange
@@ -219,7 +195,6 @@ class ProcessEnginePropertiesTest {
             // Arrange
             ApplicationContextRunner runner = contextRunner
                     .withPropertyValues(
-                            "process-engine.persistence.enabled=true",
                             "process-engine.rabbitmq.host=custom-rabbit",
                             "process-engine.rabbitmq.port=5673",
                             "process-engine.rabbitmq.username=admin",
@@ -237,8 +212,6 @@ class ProcessEnginePropertiesTest {
             // Act & Assert
             runner.run(context -> {
                 ProcessEngineProperties properties = context.getBean(ProcessEngineProperties.class);
-
-                assertThat(properties.getPersistence().isEnabled()).isTrue();
 
                 assertThat(properties.getRabbitmq().getHost()).isEqualTo("custom-rabbit");
                 assertThat(properties.getRabbitmq().getPort()).isEqualTo(5673);

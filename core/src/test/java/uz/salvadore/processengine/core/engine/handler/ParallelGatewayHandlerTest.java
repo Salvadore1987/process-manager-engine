@@ -17,7 +17,7 @@ import uz.salvadore.processengine.core.domain.model.ServiceTask;
 import uz.salvadore.processengine.core.domain.model.StartEvent;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.context.ExecutionContext;
-import uz.salvadore.processengine.core.engine.eventsourcing.EventSequencer;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemorySequenceGenerator;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -29,8 +29,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ParallelGatewayHandlerTest {
 
-    private final EventSequencer eventSequencer = new EventSequencer();
-    private final ParallelGatewayHandler handler = new ParallelGatewayHandler(eventSequencer);
+    private final InMemorySequenceGenerator sequenceGenerator = new InMemorySequenceGenerator();
+    private final ParallelGatewayHandler handler = new ParallelGatewayHandler(sequenceGenerator);
 
     @Nested
     @DisplayName("Fork (1 incoming, N outgoing)")
