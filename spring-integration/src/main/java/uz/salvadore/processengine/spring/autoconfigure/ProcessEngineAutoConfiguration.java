@@ -21,10 +21,12 @@ import uz.salvadore.processengine.core.engine.handler.ParallelGatewayHandler;
 import uz.salvadore.processengine.core.engine.handler.ServiceTaskHandler;
 import uz.salvadore.processengine.core.engine.handler.StartEventHandler;
 import uz.salvadore.processengine.core.engine.handler.TimerBoundaryEventHandler;
+import uz.salvadore.processengine.core.port.outgoing.DeploymentListener;
 import uz.salvadore.processengine.core.port.outgoing.MessageTransport;
 import uz.salvadore.processengine.core.port.outgoing.ProcessEventStore;
 import uz.salvadore.processengine.core.port.outgoing.TimerService;
 
+import java.util.List;
 import java.util.Map;
 
 @AutoConfiguration
@@ -74,7 +76,8 @@ public class ProcessEngineAutoConfiguration {
     public ProcessEngine processEngine(ProcessEventStore eventStore,
                                        ProcessDefinitionRepository definitionRepository,
                                        TokenExecutor tokenExecutor,
-                                       EventSequencer eventSequencer) {
-        return new ProcessEngine(eventStore, definitionRepository, tokenExecutor, eventSequencer);
+                                       EventSequencer eventSequencer,
+                                       List<DeploymentListener> deploymentListeners) {
+        return new ProcessEngine(eventStore, definitionRepository, tokenExecutor, eventSequencer, deploymentListeners);
     }
 }
