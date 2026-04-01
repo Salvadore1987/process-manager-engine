@@ -5,23 +5,35 @@ import org.slf4j.LoggerFactory;
 import uz.salvadore.processengine.core.domain.model.ProcessDefinition;
 import uz.salvadore.processengine.core.domain.model.ServiceTask;
 import uz.salvadore.processengine.core.port.outgoing.DeploymentListener;
+import uz.salvadore.processengine.core.port.outgoing.MessageTransport;
 import uz.salvadore.processengine.rabbitmq.RabbitMqTopologyInitializer;
 
 import java.io.IOException;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 
 /**
  * Creates RabbitMQ queues and bindings for all ServiceTask topics
- * when a process definition is deployed.
+ * when a process definition is deployed, and subscribes to result queues
+ * so that task completions are automatically processed.
  */
 public class RabbitMqDeploymentListener implements DeploymentListener {
 
     private static final Logger log = LoggerFactory.getLogger(RabbitMqDeploymentListener.class);
 
     private final RabbitMqTopologyInitializer topologyInitializer;
+    private final MessageTransport messageTransport;
+    private final Consumer<MessageTransport.MessageResult> resultCallback;
+    private final Set<String> subscribedTopics = ConcurrentHashMap.newKeySet();
 
-    public RabbitMqDeploymentListener(RabbitMqTopologyInitializer topologyInitializer) {
+    public RabbitMqDeploymentListener(RabbitMqTopologyInitializer topologyInitializer,
+                                      MessageTransport messageTransport,
+                                      Consumer<MessageTransport.MessageResult> resultCallback) {
         this.topologyInitializer = topologyInitializer;
+        this.messageTransport = messageTransport;
+        this.resultCallback = resultCallback;
     }
 
     @Override
@@ -39,6 +51,12 @@ public class RabbitMqDeploymentListener implements DeploymentListener {
                     } catch (IOException | TimeoutException e) {
                         throw new RuntimeException(
                                 "Failed to initialize RabbitMQ queues for topic: " + topic, e);
+                    }
+
+                    if (subscribedTopics.add(topic)) {
+                        messageTransport.subscribe(topic, resultCallback);
+                        log.info("Subscribed to result queue for topic '{}' (definition: {})",
+                                topic, definition.getKey());
                     }
                 });
     }

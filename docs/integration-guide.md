@@ -130,7 +130,68 @@ Body — ошибка:
 
 ## Реализация внешнего сервиса
 
-### Пример на Spring Boot + Spring AMQP
+### Рекомендуемый способ: `worker-spring-boot-starter`
+
+Самый простой способ интеграции — подключить клиентский Spring Boot Starter.
+
+**1. Добавить зависимость:**
+
+```gradle
+implementation("uz.salvadore:worker-spring-boot-starter:1.0-SNAPSHOT")
+```
+
+**2. Настроить подключение к RabbitMQ (`application.yml`):**
+
+```yaml
+process-engine:
+  worker:
+    rabbitmq:
+      host: localhost
+      port: 5672
+      username: guest
+      password: guest
+      virtual-host: /
+```
+
+**3. Реализовать обработчик:**
+
+```java
+@Component
+public class OrderValidationHandler implements ExternalTaskHandler {
+
+    @Override
+    @JobWorker(topic = "order.validate")
+    public void execute(TaskContext context) {
+        try {
+            int orderAmount = ((Number) context.getVariable("orderAmount")).intValue();
+            boolean approved = orderAmount > 0 && orderAmount < 1_000_000;
+
+            context.complete(Map.of(
+                    "approved", approved,
+                    "validatedAt", Instant.now().toString()
+            ));
+        } catch (Exception e) {
+            context.error("VALIDATION_ERROR", e.getMessage());
+        }
+    }
+}
+```
+
+Starter автоматически:
+- Подключается к RabbitMQ
+- Слушает очередь `task.order.validate.execute`
+- Извлекает `correlationId` и переменные процесса
+- Передаёт их в `TaskContext`
+- При вызове `context.complete()` — публикует результат в `task.order.validate.result`
+- При вызове `context.error()` — публикует ошибку с `__error` и `__errorCode`
+
+Подробная документация: [`docs/worker-spring-boot-starter-spec.md`](worker-spring-boot-starter-spec.md)
+
+---
+
+### Альтернатива: ручная интеграция на Spring AMQP
+
+Если `worker-spring-boot-starter` не подходит, можно реализовать worker вручную:
 
 ```java
 @Component
@@ -181,7 +242,7 @@ public class OrderValidationWorker {
 }
 ```
 
-### Пример на чистом amqp-client
+### Альтернатива: чистый amqp-client
 
 ```java
 Channel channel = connection.createChannel();
@@ -519,10 +580,10 @@ EndEvent
 | `shipping.arrange` | `task.shipping.arrange.execute` | Организация доставки |
 | `notification.order-confirmed` | `task.notification.order-confirmed.execute` | Отправка уведомления |
 
-Каждый сервис:
-1. Слушает свою `.execute` очередь
-2. Обрабатывает переменные процесса
-3. Отправляет результат в `.result` очередь с тем же `correlationId`
+Каждый сервис реализует `ExternalTaskHandler` с аннотацией `@JobWorker(topic = "...")`:
+1. Получает переменные процесса через `TaskContext`
+2. Выполняет бизнес-логику
+3. Вызывает `context.complete(result)` или `context.error(code, message)`
 
 ---
 
@@ -572,11 +633,11 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/instances
 ## Чеклист интеграции
 
 1. **Задеплоить BPMN-определение** через `POST /api/v1/definitions`
+   - При деплое движок автоматически создаёт RabbitMQ очереди и bindings для всех ServiceTask топиков
 2. **Реализовать worker-сервисы** для каждого `topic` из BPMN:
-   - Подключиться к RabbitMQ
-   - Слушать `task.{topic}.execute`
-   - Обрабатывать payload (переменные процесса)
-   - Отправлять результат в `task.{topic}.result` с тем же `correlationId`
+   - Подключить `worker-spring-boot-starter` как зависимость
+   - Реализовать `ExternalTaskHandler` с `@JobWorker(topic = "...")`
+   - Вызывать `context.complete(result)` или `context.error(code, message)`
 3. **Запустить экземпляр процесса** через `POST /api/v1/instances`
 4. **Мониторить** через `/api/v1/incidents` и `/api/v1/history/instances/{id}/events`
 5. **Обрабатывать инциденты** через `PUT /api/v1/incidents/{id}/resolve`

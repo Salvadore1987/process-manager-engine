@@ -48,20 +48,29 @@ Event-sourced архитектура: состояние экземпляров 
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
 │               spring-integration (Spring Boot Starter)       │
-│         Auto-configuration │ Spring Bean registration        │
+│    Auto-configuration │ DeploymentListener │ Health/Metrics  │
+├─────────────────────────────────────────────────────────────┤
+│               security (OAuth2/Keycloak)                     │
+│         ResourceServerConfig │ JWT Converter │ Roles         │
 └──────────────────────────┬──────────────────────────────────┘
                            │
 ┌──────────────────────────▼──────────────────────────────────┐
 │                        core (standalone engine)              │
 │  BPMN Parser │ Token Engine │ Event Sourcing │ Timer Svc    │
-│  Ports: ProcessEventStore, MessageTransport, ActivityHandler │
+│  Ports: ProcessEventStore, MessageTransport, DeploymentListener│
 └──────────────┬──────────────────────────────┬───────────────┘
                │                              │
 ┌──────────────▼──────────┐   ┌───────────────▼───────────────┐
 │   rabbitmq-transport    │   │   persistence adapters        │
 │  AMQP Client (official) │   │   (JDBC, MongoDB, etc.)       │
 │  Topic per task type     │   │   implements ProcessEventStore│
-└─────────────────────────┘   └───────────────────────────────┘
+└──────────────┬──────────┘   └───────────────────────────────┘
+               │
+     ┌─────────▼──────────────────────────────────────────────┐
+     │          worker-spring-boot-starter (client)            │
+     │  ExternalTaskHandler │ @JobWorker │ TaskContext          │
+     │  (standalone module for external worker services)       │
+     └────────────────────────────────────────────────────────┘
 ```
 
 ### Technology Stack
@@ -81,7 +90,7 @@ Event-sourced архитектура: состояние экземпляров 
 
 ### Module Structure
 
-Проект состоит из 4 Gradle-модулей:
+Проект состоит из 6 Gradle-модулей:
 
 #### 1. `core`
 Standalone движок, не зависит от Spring и RabbitMQ.
@@ -98,6 +107,7 @@ Standalone движок, не зависит от Spring и RabbitMQ.
 **Ключевые порты:**
 - `MessageTransport` — отправка/получение сообщений (реализуется в rabbitmq-transport)
 - `ProcessEventStore` — сохранение/чтение событий (реализуется адаптером БД или `NoOpEventStore`)
+- `DeploymentListener` — callback при деплое определения (реализуется в spring-integration для создания RabbitMQ очередей)
 - `ActivityHandler` — интерфейс для кастомных шагов
 - `TimerService` — планирование и отмена таймеров
 
@@ -150,6 +160,25 @@ Spring Boot MVC приложение с полным Camunda-like REST API.
 - Сериализация/десериализация через Jackson
 - Error handling и стандартизированные ответы
 - Virtual threads через `spring.threads.virtual.enabled=true`
+
+#### 5. `security`
+OAuth2/Keycloak интеграция для авторизации REST API.
+
+**Ответственность:**
+- `ResourceServerConfig` — настройка endpoint-доступа по ролям
+- `KeycloakJwtAuthenticationConverter` — конвертация JWT → Spring Security authorities
+- Роли: `process-admin`, `process-operator`, `process-viewer`, `process-deployer`
+
+#### 6. `worker-spring-boot-starter`
+Клиентский Spring Boot Starter для внешних сервисов (workers).
+
+**Ответственность:**
+- Автоматическое подключение к RabbitMQ и прослушивание execute-очередей
+- `ExternalTaskHandler` — интерфейс с методом `execute(TaskContext)`
+- `@JobWorker(topic = "...")` — аннотация на методе `execute` для привязки к топику
+- `TaskContext` — доступ к переменным процесса + методы `complete()` / `error()` для ответа
+- Health indicator для мониторинга подключения и consumers
+- Не зависит от `core` или `rabbitmq-transport` — самостоятельная клиентская библиотека
 
 ### Component Overview
 
