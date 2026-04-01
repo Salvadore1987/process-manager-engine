@@ -66,11 +66,17 @@ public final class RabbitMqMessageTransport implements MessageTransport {
     @Override
     @SuppressWarnings("unchecked")
     public void subscribe(String topic, Consumer<MessageResult> callback) {
+        if (consumerChannels.containsKey(topic)) {
+            log.debug("Already subscribed to topic '{}', skipping", topic);
+            return;
+        }
+
         try {
             topologyInitializer.ensureTopicQueues(topic);
 
             String resultQueue = "task." + topic + ".result";
             Channel channel = connectionManager.createChannel();
+            channel.basicQos(1);
             consumerChannels.put(topic, channel);
 
             channel.basicConsume(resultQueue, false, new DefaultConsumer(channel) {

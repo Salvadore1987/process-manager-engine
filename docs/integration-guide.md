@@ -46,7 +46,9 @@
 2. Токен переходит в состояние `WAITING`
 3. Внешний сервис читает сообщение, выполняет бизнес-логику
 4. Сервис отправляет результат в очередь `task.{topic}.result`
-5. Движок получает результат, мержит переменные и продвигает токен дальше
+5. Движок получает результат:
+   - **Успех** (`context.complete()`) — мержит переменные и продвигает токен дальше
+   - **Ошибка** (`context.error()`) — ищет `ErrorBoundaryEvent` на задаче; если найден — маршрутизирует токен по error flow; если нет — запускает компенсацию завершённых задач и переводит процесс в `ERROR`
 
 ```
 Engine                          RabbitMQ                        Your Service
@@ -178,12 +180,20 @@ public class OrderValidationHandler implements ExternalTaskHandler {
 ```
 
 Starter автоматически:
-- Подключается к RabbitMQ
+- Подключается к RabbitMQ с `basicQos(1)` для защиты от дублирования сообщений
 - Слушает очередь `task.order.validate.execute`
 - Извлекает `correlationId` и переменные процесса
 - Передаёт их в `TaskContext`
-- При вызове `context.complete()` — публикует результат в `task.order.validate.result`
-- При вызове `context.error()` — публикует ошибку с `__error` и `__errorCode`
+- При вызове `context.complete()` — публикует результат в `task.order.validate.result`, движок вызывает `completeTask()` и продвигает токен дальше
+- При вызове `context.error()` — публикует ошибку с `__error` и `__errorCode`, движок вызывает `failTask()` и маршрутизирует через `ErrorBoundaryEvent` или запускает компенсацию
+
+**Retry на стороне воркера** (по умолчанию выключен):
+
+```java
+@JobWorker(topic = "order.deliver", retry = true, retryCount = 5, retryBackoff = 2000)
+```
+
+Retry срабатывает только при uncaught exception в обработчике. Явные вызовы `context.error()` — это бизнес-ошибки, они не повторяются.
 
 Подробная документация: [`docs/worker-spring-boot-starter-spec.md`](worker-spring-boot-starter-spec.md)
 
@@ -511,11 +521,14 @@ curl http://localhost:8080/api/v1/history/instances/{id}/activities
 </bpmn:boundaryEvent>
 ```
 
-Если дочерний процесс завершается `ErrorEndEvent` с `errorCode="PAYMENT_FAILED"` — токен родителя перенаправляется по пути ошибки.
+Когда воркер вызывает `context.error(errorCode, message)`, движок:
+1. Ищет `ErrorBoundaryEvent` с `attachedToRef` == текущей задаче
+2. Если `errorCode` boundary совпадает (или boundary не фильтрует по коду) — токен перенаправляется по пути ошибки
+3. Если `ErrorBoundaryEvent` не найден — запускается компенсация (см. ниже), затем процесс переходит в `ERROR`
 
 ### Compensation Boundary Event (откат)
 
-Запускает компенсацию (undo) если последующая задача упала.
+Запускает компенсацию (undo) если последующая задача упала и нет `ErrorBoundaryEvent`.
 
 ```xml
 <bpmn:boundaryEvent id="Compensate" attachedToRef="CallActivity_Payment">
@@ -528,6 +541,12 @@ curl http://localhost:8080/api/v1/history/instances/{id}/activities
 
 <bpmn:association sourceRef="Compensate" targetRef="Task_Refund" />
 ```
+
+**Порядок компенсации:**
+- При ошибке без `ErrorBoundaryEvent` движок находит все ранее завершённые задачи с привязанными `CompensationBoundaryEvent`
+- Компенсационные задачи запускаются **в обратном порядке** завершения (LIFO)
+- Процесс переходит в состояние `COMPENSATING`, затем в `ERROR`
+- Каждая компенсационная задача — обычный `ServiceTask`, отправляемый в RabbitMQ
 
 ---
 

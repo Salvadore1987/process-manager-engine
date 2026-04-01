@@ -3,10 +3,12 @@ package uz.salvadore.processengine.core.parser.mapper;
 import uz.salvadore.processengine.core.domain.model.FlowNode;
 import uz.salvadore.processengine.core.domain.model.ProcessDefinition;
 import uz.salvadore.processengine.core.domain.model.SequenceFlow;
+import uz.salvadore.processengine.core.parser.jaxb.BpmnAssociation;
 import uz.salvadore.processengine.core.parser.jaxb.BpmnDefinitions;
 import uz.salvadore.processengine.core.parser.jaxb.BpmnError;
 import uz.salvadore.processengine.core.parser.jaxb.BpmnProcess;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -36,9 +38,18 @@ public class ProcessDefinitionMapper {
                 .map(element -> flowNodeMapper.map(element, errorMap))
                 .toList();
 
-        List<SequenceFlow> sequenceFlows = process.getSequenceFlows().stream()
+        List<SequenceFlow> sequenceFlows = new ArrayList<>(process.getSequenceFlows().stream()
                 .map(sequenceFlowMapper::map)
-                .toList();
+                .toList());
+
+        // Convert BPMN associations to sequence flows (used for compensation boundary → compensation task links)
+        for (BpmnAssociation association : process.getAssociations()) {
+            sequenceFlows.add(new SequenceFlow(
+                    association.getId(),
+                    association.getSourceRef(),
+                    association.getTargetRef(),
+                    null));
+        }
 
         return ProcessDefinition.create(
                 process.getId(),

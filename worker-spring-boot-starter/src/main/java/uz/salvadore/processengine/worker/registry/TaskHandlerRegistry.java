@@ -14,8 +14,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TaskHandlerRegistry {
 
     private final Map<String, ExternalTaskHandler> handlers = new ConcurrentHashMap<>();
+    private final Map<String, WorkerRetryConfig> retryConfigs = new ConcurrentHashMap<>();
 
-    public void register(String topic, ExternalTaskHandler handler) {
+    public void register(String topic, ExternalTaskHandler handler, WorkerRetryConfig retryConfig) {
         ExternalTaskHandler existing = handlers.putIfAbsent(topic, handler);
         if (existing != null) {
             throw new IllegalStateException(
@@ -23,10 +24,15 @@ public class TaskHandlerRegistry {
                             existing.getClass().getName() + " and " + handler.getClass().getName()
             );
         }
+        retryConfigs.put(topic, retryConfig);
     }
 
     public ExternalTaskHandler getHandler(String topic) {
         return handlers.get(topic);
+    }
+
+    public WorkerRetryConfig getRetryConfig(String topic) {
+        return retryConfigs.getOrDefault(topic, WorkerRetryConfig.DISABLED);
     }
 
     public Set<String> getTopics() {

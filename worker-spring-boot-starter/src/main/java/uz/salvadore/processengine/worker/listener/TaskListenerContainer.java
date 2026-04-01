@@ -15,6 +15,8 @@ import uz.salvadore.processengine.worker.TaskContext;
 import uz.salvadore.processengine.worker.registry.TaskHandlerRegistry;
 
 import java.io.IOException;
+import uz.salvadore.processengine.worker.registry.WorkerRetryConfig;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -57,6 +59,7 @@ public class TaskListenerContainer implements SmartLifecycle {
             try {
                 connection = connectionFactory.newConnection();
                 channel = connection.createChannel();
+                channel.basicQos(1);
 
                 Set<String> topics = registry.getTopics();
                 if (topics.isEmpty()) {
@@ -148,9 +151,19 @@ public class TaskListenerContainer implements SmartLifecycle {
                 });
 
         String correlationId = resolveCorrelationId(properties);
+        WorkerRetryConfig retryConfig = registry.getRetryConfig(topic);
 
+        if (retryConfig.enabled()) {
+            executeWithRetry(handler, topic, correlationId, messageBody, retryConfig);
+        } else {
+            executeOnce(handler, topic, correlationId, messageBody);
+        }
+    }
+
+    private void executeOnce(ExternalTaskHandler handler, String topic,
+                             String correlationId, Map<String, Object> variables) throws Exception {
         TaskContext.ResponseSender responseSender = new RabbitMqResponseSender(topic);
-        TaskContext context = new TaskContext(correlationId, messageBody, responseSender);
+        TaskContext context = new TaskContext(correlationId, variables, responseSender);
 
         handler.execute(context);
 
@@ -158,6 +171,28 @@ public class TaskListenerContainer implements SmartLifecycle {
             log.warn("Handler for topic '{}' did not call complete() or error(). "
                     + "Auto-completing with empty result.", topic);
             context.complete(Map.of());
+        }
+    }
+
+    private void executeWithRetry(ExternalTaskHandler handler, String topic,
+                                  String correlationId, Map<String, Object> variables,
+                                  WorkerRetryConfig retryConfig) throws Exception {
+        int attempt = 0;
+        while (true) {
+            try {
+                executeOnce(handler, topic, correlationId, variables);
+                return;
+            } catch (Exception ex) {
+                attempt++;
+                if (attempt > retryConfig.maxAttempts()) {
+                    log.error("Handler for topic '{}' failed after {} retries, giving up. correlationId={}",
+                            topic, retryConfig.maxAttempts(), correlationId, ex);
+                    throw ex;
+                }
+                log.warn("Handler for topic '{}' failed (attempt {}/{}), retrying in {}ms. correlationId={}",
+                        topic, attempt, retryConfig.maxAttempts(), retryConfig.backoffMs(), correlationId, ex);
+                Thread.sleep(retryConfig.backoffMs());
+            }
         }
     }
 

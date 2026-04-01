@@ -36,4 +36,22 @@ public @interface JobWorker {
      * The topic name this worker subscribes to.
      */
     String topic();
+
+    /**
+     * Whether to enable automatic retry on handler exceptions.
+     * Disabled by default — retries must be explicitly opted into.
+     */
+    boolean retry() default false;
+
+    /**
+     * Maximum number of retry attempts before giving up.
+     * Only applies when {@link #retry()} is {@code true}.
+     */
+    int retryCount() default 3;
+
+    /**
+     * Backoff interval between retry attempts in milliseconds.
+     * Only applies when {@link #retry()} is {@code true}.
+     */
+    long retryBackoff() default 1000;
 }

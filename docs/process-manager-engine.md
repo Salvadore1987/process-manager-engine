@@ -100,7 +100,7 @@ Standalone движок, не зависит от Spring и RabbitMQ.
 - BPMN валидация — whitelist поддерживаемых элементов, отклонение определений с неподдерживаемыми нотациями (возвращает список неподдерживаемых элементов с позициями в XML)
 - Token-based execution engine — продвижение токенов по графу BPMN
 - Event sourcing — генерация и replay событий для восстановления состояния
-- Process lifecycle management — создание, выполнение, приостановка, возобновление, завершение
+- Process lifecycle management — создание, выполнение, приостановка, возобновление, завершение, обработка ошибок задач с маршрутизацией через error boundary и компенсацией
 - Timer scheduling — абстракция для таймеров
 - Определение портов (interfaces): `ProcessEventStore`, `MessageTransport`, `ActivityHandler`, `TimerService`
 
@@ -201,8 +201,12 @@ OAuth2/Keycloak интеграция для авторизации REST API.
 - `TimerScheduledEvent` / `TimerFiredEvent`
 - `CompensationTriggeredEvent`
 - `CallActivityStartedEvent` / `CallActivityCompletedEvent`
+- `TokenWaitingEvent`
 
 Восстановление: replay всех событий для `processInstanceId` → актуальное состояние.
+
+#### Конкурентная безопасность
+`completeTask()` и `failTask()` синхронизируются по `processInstanceId` — два конкурентных вызова для одного экземпляра сериализуются, исключая двойную обработку токена.
 
 ## Data Model
 
@@ -222,7 +226,7 @@ OAuth2/Keycloak интеграция для авторизации REST API.
 - `id: UUID (v7)` — уникальный идентификатор экземпляра
 - `definitionId: UUID` — ссылка на определение
 - `parentProcessInstanceId: UUID` — ссылка на родительский экземпляр (null для корневого процесса, заполняется при вызове через CallActivity)
-- `state: ProcessState` — RUNNING, SUSPENDED, COMPLETED, ERROR, TERMINATED
+- `state: ProcessState` — RUNNING, SUSPENDED, COMPENSATING, COMPLETED, ERROR, TERMINATED
 - `tokens: List<Token>` — активные токены
 - `variables: Map<String, Object>` — переменные процесса
 - `startedAt: Instant`
@@ -338,8 +342,12 @@ FlowNode *──* SequenceFlow (incoming/outgoing)
    - Сообщение отправляется в `retry.{taskType}` с TTL = baseInterval × 2^attempt
    - Header `x-retry-count` инкрементируется
    - После `maxRetries` — сообщение в DLQ, создаётся Incident
-4. CompensationBoundaryEvent — при ошибке запускается компенсационная цепочка (обратный порядок выполненных шагов)
+4. **Task failure** (`context.error()` / `failTask()`):
+   - Движок ищет `ErrorBoundaryEvent` с `attachedToRef` == текущей задаче
+   - **Если найден** — токен перенаправляется через error boundary flow
+   - **Если не найден** — запускается компенсация: для всех завершённых задач с `CompensationBoundaryEvent` создаются `CompensationTriggeredEvent` в обратном порядке (LIFO), процесс переходит в `COMPENSATING`, затем в `ERROR`
 5. ErrorBoundaryEvent — ловит конкретный тип ошибки и перенаправляет поток
+6. CompensationBoundaryEvent — при ошибке запускается компенсационная цепочка (обратный порядок выполненных шагов)
 
 ### BPMN Validation Error (400)
 
