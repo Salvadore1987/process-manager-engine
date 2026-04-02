@@ -6,7 +6,7 @@ import uz.salvadore.processengine.core.domain.model.FlowNode;
 import uz.salvadore.processengine.core.domain.model.TimerBoundaryEvent;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.context.ExecutionContext;
-import uz.salvadore.processengine.core.engine.eventsourcing.EventSequencer;
+import uz.salvadore.processengine.core.port.outgoing.SequenceGenerator;
 import uz.salvadore.processengine.core.port.outgoing.TimerService;
 import uz.salvadore.processengine.core.util.UUIDv7;
 
@@ -21,9 +21,9 @@ import java.util.List;
 public final class TimerBoundaryEventHandler implements NodeHandler {
 
     private final TimerService timerService;
-    private final EventSequencer eventSequencer;
+    private final SequenceGenerator eventSequencer;
 
-    public TimerBoundaryEventHandler(TimerService timerService, EventSequencer eventSequencer) {
+    public TimerBoundaryEventHandler(TimerService timerService, SequenceGenerator eventSequencer) {
         this.timerService = timerService;
         this.eventSequencer = eventSequencer;
     }

@@ -12,7 +12,7 @@ import uz.salvadore.processengine.core.domain.model.SequenceFlow;
 import uz.salvadore.processengine.core.domain.model.StartEvent;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.context.ExecutionContext;
-import uz.salvadore.processengine.core.engine.eventsourcing.EventSequencer;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemorySequenceGenerator;
 
 import java.time.Instant;
 import java.util.List;
@@ -24,8 +24,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class StartEventHandlerTest {
 
-    private final EventSequencer eventSequencer = new EventSequencer();
-    private final StartEventHandler handler = new StartEventHandler(eventSequencer);
+    private final InMemorySequenceGenerator sequenceGenerator = new InMemorySequenceGenerator();
+    private final StartEventHandler handler = new StartEventHandler(sequenceGenerator);
 
     @Test
     @DisplayName("Should emit TokenMovedEvent to first outgoing flow target")

@@ -14,7 +14,9 @@ import uz.salvadore.processengine.core.domain.model.ProcessInstance;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.condition.SimpleConditionEvaluator;
 import uz.salvadore.processengine.core.engine.eventsourcing.EventApplier;
-import uz.salvadore.processengine.core.engine.eventsourcing.EventSequencer;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryInstanceDefinitionMapping;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessDefinitionStore;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemorySequenceGenerator;
 import uz.salvadore.processengine.core.engine.eventsourcing.ProcessInstanceProjection;
 import uz.salvadore.processengine.core.engine.handler.CallActivityHandler;
 import uz.salvadore.processengine.core.engine.handler.EndEventHandler;
@@ -67,23 +69,23 @@ class OrderProcessE2ETest {
     @BeforeEach
     void setUp() throws IOException {
         eventStore = new InMemoryEventStore();
-        ProcessDefinitionRepository definitionRepository = new ProcessDefinitionRepository();
-        EventSequencer eventSequencer = new EventSequencer();
+        InMemoryProcessDefinitionStore definitionStore = new InMemoryProcessDefinitionStore();
+        InMemorySequenceGenerator sequenceGenerator = new InMemorySequenceGenerator();
         messageTransport = new RecordingMessageTransport();
 
         SimpleConditionEvaluator conditionEvaluator = new SimpleConditionEvaluator();
 
         Map<NodeType, NodeHandler> handlers = Map.of(
-                NodeType.START_EVENT, new StartEventHandler(eventSequencer),
-                NodeType.END_EVENT, new EndEventHandler(eventSequencer),
+                NodeType.START_EVENT, new StartEventHandler(sequenceGenerator),
+                NodeType.END_EVENT, new EndEventHandler(sequenceGenerator),
                 NodeType.SERVICE_TASK, new ServiceTaskHandler(messageTransport),
-                NodeType.EXCLUSIVE_GATEWAY, new ExclusiveGatewayHandler(conditionEvaluator, eventSequencer),
-                NodeType.PARALLEL_GATEWAY, new ParallelGatewayHandler(eventSequencer),
-                NodeType.CALL_ACTIVITY, new CallActivityHandler(eventSequencer)
+                NodeType.EXCLUSIVE_GATEWAY, new ExclusiveGatewayHandler(conditionEvaluator, sequenceGenerator),
+                NodeType.PARALLEL_GATEWAY, new ParallelGatewayHandler(sequenceGenerator),
+                NodeType.CALL_ACTIVITY, new CallActivityHandler(sequenceGenerator)
         );
 
         TokenExecutor tokenExecutor = new TokenExecutor(handlers);
-        engine = new ProcessEngine(eventStore, definitionRepository, tokenExecutor, eventSequencer);
+        engine = new ProcessEngine(eventStore, definitionStore, tokenExecutor, sequenceGenerator, new InMemoryInstanceDefinitionMapping());
 
         // Parse and deploy the order process BPMN
         BpmnParser parser = new BpmnParser();

@@ -6,13 +6,14 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryInstanceDefinitionMapping;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessDefinitionStore;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemorySequenceGenerator;
 import uz.salvadore.processengine.core.domain.enums.NodeType;
-import uz.salvadore.processengine.core.engine.ProcessDefinitionRepository;
 import uz.salvadore.processengine.core.engine.ProcessEngine;
 import uz.salvadore.processengine.core.engine.TokenExecutor;
 import uz.salvadore.processengine.core.engine.condition.ConditionEvaluator;
 import uz.salvadore.processengine.core.engine.condition.SimpleConditionEvaluator;
-import uz.salvadore.processengine.core.engine.eventsourcing.EventSequencer;
 import uz.salvadore.processengine.core.engine.handler.CallActivityHandler;
 import uz.salvadore.processengine.core.engine.handler.CompensationBoundaryEventHandler;
 import uz.salvadore.processengine.core.engine.handler.EndEventHandler;
@@ -24,8 +25,11 @@ import uz.salvadore.processengine.core.engine.handler.ServiceTaskHandler;
 import uz.salvadore.processengine.core.engine.handler.StartEventHandler;
 import uz.salvadore.processengine.core.engine.handler.TimerBoundaryEventHandler;
 import uz.salvadore.processengine.core.port.outgoing.DeploymentListener;
+import uz.salvadore.processengine.core.port.outgoing.InstanceDefinitionMapping;
 import uz.salvadore.processengine.core.port.outgoing.MessageTransport;
+import uz.salvadore.processengine.core.port.outgoing.ProcessDefinitionStore;
 import uz.salvadore.processengine.core.port.outgoing.ProcessEventStore;
+import uz.salvadore.processengine.core.port.outgoing.SequenceGenerator;
 import uz.salvadore.processengine.core.port.outgoing.TimerService;
 import uz.salvadore.processengine.rabbitmq.RabbitMqTopologyInitializer;
 
@@ -38,8 +42,8 @@ public class ProcessEngineAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public EventSequencer eventSequencer() {
-        return new EventSequencer();
+    public SequenceGenerator sequenceGenerator() {
+        return new InMemorySequenceGenerator();
     }
 
     @Bean
@@ -50,26 +54,32 @@ public class ProcessEngineAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ProcessDefinitionRepository processDefinitionRepository() {
-        return new ProcessDefinitionRepository();
+    public ProcessDefinitionStore processDefinitionStore() {
+        return new InMemoryProcessDefinitionStore();
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public TokenExecutor tokenExecutor(EventSequencer eventSequencer,
+    public InstanceDefinitionMapping instanceDefinitionMapping() {
+        return new InMemoryInstanceDefinitionMapping();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public TokenExecutor tokenExecutor(SequenceGenerator sequenceGenerator,
                                        ConditionEvaluator conditionEvaluator,
                                        MessageTransport messageTransport,
                                        TimerService timerService) {
         Map<NodeType, NodeHandler> handlers = Map.of(
-                NodeType.START_EVENT, new StartEventHandler(eventSequencer),
-                NodeType.END_EVENT, new EndEventHandler(eventSequencer),
+                NodeType.START_EVENT, new StartEventHandler(sequenceGenerator),
+                NodeType.END_EVENT, new EndEventHandler(sequenceGenerator),
                 NodeType.SERVICE_TASK, new ServiceTaskHandler(messageTransport),
-                NodeType.EXCLUSIVE_GATEWAY, new ExclusiveGatewayHandler(conditionEvaluator, eventSequencer),
-                NodeType.PARALLEL_GATEWAY, new ParallelGatewayHandler(eventSequencer),
-                NodeType.CALL_ACTIVITY, new CallActivityHandler(eventSequencer),
-                NodeType.TIMER_BOUNDARY, new TimerBoundaryEventHandler(timerService, eventSequencer),
-                NodeType.ERROR_BOUNDARY, new ErrorBoundaryEventHandler(eventSequencer),
-                NodeType.COMPENSATION_BOUNDARY, new CompensationBoundaryEventHandler(eventSequencer)
+                NodeType.EXCLUSIVE_GATEWAY, new ExclusiveGatewayHandler(conditionEvaluator, sequenceGenerator),
+                NodeType.PARALLEL_GATEWAY, new ParallelGatewayHandler(sequenceGenerator),
+                NodeType.CALL_ACTIVITY, new CallActivityHandler(sequenceGenerator),
+                NodeType.TIMER_BOUNDARY, new TimerBoundaryEventHandler(timerService, sequenceGenerator),
+                NodeType.ERROR_BOUNDARY, new ErrorBoundaryEventHandler(sequenceGenerator),
+                NodeType.COMPENSATION_BOUNDARY, new CompensationBoundaryEventHandler(sequenceGenerator)
         );
         return new TokenExecutor(handlers);
     }
@@ -77,11 +87,13 @@ public class ProcessEngineAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public ProcessEngine processEngine(ProcessEventStore eventStore,
-                                       ProcessDefinitionRepository definitionRepository,
+                                       ProcessDefinitionStore definitionStore,
                                        TokenExecutor tokenExecutor,
-                                       EventSequencer eventSequencer,
+                                       SequenceGenerator sequenceGenerator,
+                                       InstanceDefinitionMapping instanceDefinitionMapping,
                                        List<DeploymentListener> deploymentListeners) {
-        return new ProcessEngine(eventStore, definitionRepository, tokenExecutor, eventSequencer, deploymentListeners);
+        return new ProcessEngine(eventStore, definitionStore, tokenExecutor, sequenceGenerator,
+                instanceDefinitionMapping, deploymentListeners);
     }
 
     @Bean

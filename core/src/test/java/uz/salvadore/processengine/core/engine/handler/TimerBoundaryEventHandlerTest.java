@@ -13,7 +13,7 @@ import uz.salvadore.processengine.core.domain.model.StartEvent;
 import uz.salvadore.processengine.core.domain.model.TimerBoundaryEvent;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.context.ExecutionContext;
-import uz.salvadore.processengine.core.engine.eventsourcing.EventSequencer;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemorySequenceGenerator;
 import uz.salvadore.processengine.core.port.outgoing.TimerService;
 
 import java.time.Duration;
@@ -46,8 +46,8 @@ class TimerBoundaryEventHandlerTest {
     }
 
     private final RecordingTimerService timerService = new RecordingTimerService();
-    private final EventSequencer eventSequencer = new EventSequencer();
-    private final TimerBoundaryEventHandler handler = new TimerBoundaryEventHandler(timerService, eventSequencer);
+    private final InMemorySequenceGenerator sequenceGenerator = new InMemorySequenceGenerator();
+    private final TimerBoundaryEventHandler handler = new TimerBoundaryEventHandler(timerService, sequenceGenerator);
 
     @Test
     @DisplayName("Should call timerService.schedule() and emit TimerScheduledEvent")

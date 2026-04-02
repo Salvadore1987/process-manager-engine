@@ -12,7 +12,7 @@ import uz.salvadore.processengine.core.domain.model.EndEvent;
 import uz.salvadore.processengine.core.domain.model.ProcessDefinition;
 import uz.salvadore.processengine.core.domain.model.SequenceFlow;
 import uz.salvadore.processengine.core.domain.model.StartEvent;
-import uz.salvadore.processengine.core.engine.ProcessDefinitionRepository;
+import uz.salvadore.processengine.core.port.outgoing.ProcessDefinitionStore;
 import uz.salvadore.processengine.core.engine.ProcessEngine;
 import uz.salvadore.processengine.core.parser.BpmnParser;
 import uz.salvadore.processengine.core.parser.BpmnValidationResult;
@@ -45,7 +45,7 @@ class DefinitionControllerSecurityTest {
     private ProcessEngine processEngine;
 
     @MockBean
-    private ProcessDefinitionRepository definitionRepository;
+    private ProcessDefinitionStore definitionRepository;
 
     @MockBean
     private BpmnParser bpmnParser;

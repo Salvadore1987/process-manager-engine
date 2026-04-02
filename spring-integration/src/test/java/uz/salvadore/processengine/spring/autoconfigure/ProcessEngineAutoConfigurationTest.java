@@ -7,13 +7,14 @@ import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import uz.salvadore.processengine.core.engine.ProcessDefinitionRepository;
 import uz.salvadore.processengine.core.engine.ProcessEngine;
 import uz.salvadore.processengine.core.engine.TokenExecutor;
 import uz.salvadore.processengine.core.engine.condition.ConditionEvaluator;
 import uz.salvadore.processengine.core.engine.condition.SimpleConditionEvaluator;
-import uz.salvadore.processengine.core.engine.eventsourcing.EventSequencer;
+import uz.salvadore.processengine.core.port.outgoing.InstanceDefinitionMapping;
 import uz.salvadore.processengine.core.port.outgoing.MessageTransport;
+import uz.salvadore.processengine.core.port.outgoing.ProcessDefinitionStore;
+import uz.salvadore.processengine.core.port.outgoing.SequenceGenerator;
 import uz.salvadore.processengine.core.port.outgoing.TimerService;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,10 +58,10 @@ class ProcessEngineAutoConfigurationTest {
         }
 
         @Test
-        @DisplayName("creates ProcessDefinitionRepository bean")
-        void createsProcessDefinitionRepositoryBean() {
+        @DisplayName("creates ProcessDefinitionStore bean")
+        void createsProcessDefinitionStoreBean() {
             contextRunner.run(context -> {
-                assertThat(context).hasSingleBean(ProcessDefinitionRepository.class);
+                assertThat(context).hasSingleBean(ProcessDefinitionStore.class);
             });
         }
 
@@ -73,10 +74,18 @@ class ProcessEngineAutoConfigurationTest {
         }
 
         @Test
-        @DisplayName("creates EventSequencer bean")
-        void createsEventSequencerBean() {
+        @DisplayName("creates SequenceGenerator bean")
+        void createsSequenceGeneratorBean() {
             contextRunner.run(context -> {
-                assertThat(context).hasSingleBean(EventSequencer.class);
+                assertThat(context).hasSingleBean(SequenceGenerator.class);
+            });
+        }
+
+        @Test
+        @DisplayName("creates InstanceDefinitionMapping bean")
+        void createsInstanceDefinitionMappingBean() {
+            contextRunner.run(context -> {
+                assertThat(context).hasSingleBean(InstanceDefinitionMapping.class);
             });
         }
 
@@ -96,17 +105,17 @@ class ProcessEngineAutoConfigurationTest {
     class ConditionalOnMissingBeanBehavior {
 
         @Test
-        @DisplayName("uses custom EventSequencer when provided")
-        void usesCustomEventSequencer() {
+        @DisplayName("uses custom SequenceGenerator when provided")
+        void usesCustomSequenceGenerator() {
             // Arrange
-            EventSequencer customSequencer = new EventSequencer();
+            SequenceGenerator customGenerator = mock(SequenceGenerator.class);
 
             // Act & Assert
             contextRunner
-                    .withBean(EventSequencer.class, () -> customSequencer)
+                    .withBean(SequenceGenerator.class, () -> customGenerator)
                     .run(context -> {
-                        assertThat(context).hasSingleBean(EventSequencer.class);
-                        assertThat(context.getBean(EventSequencer.class)).isSameAs(customSequencer);
+                        assertThat(context).hasSingleBean(SequenceGenerator.class);
+                        assertThat(context.getBean(SequenceGenerator.class)).isSameAs(customGenerator);
                     });
         }
 
@@ -126,17 +135,17 @@ class ProcessEngineAutoConfigurationTest {
         }
 
         @Test
-        @DisplayName("uses custom ProcessDefinitionRepository when provided")
-        void usesCustomProcessDefinitionRepository() {
+        @DisplayName("uses custom ProcessDefinitionStore when provided")
+        void usesCustomProcessDefinitionStore() {
             // Arrange
-            ProcessDefinitionRepository customRepository = new ProcessDefinitionRepository();
+            ProcessDefinitionStore customStore = mock(ProcessDefinitionStore.class);
 
             // Act & Assert
             contextRunner
-                    .withBean(ProcessDefinitionRepository.class, () -> customRepository)
+                    .withBean(ProcessDefinitionStore.class, () -> customStore)
                     .run(context -> {
-                        assertThat(context).hasSingleBean(ProcessDefinitionRepository.class);
-                        assertThat(context.getBean(ProcessDefinitionRepository.class)).isSameAs(customRepository);
+                        assertThat(context).hasSingleBean(ProcessDefinitionStore.class);
+                        assertThat(context.getBean(ProcessDefinitionStore.class)).isSameAs(customStore);
                     });
         }
 

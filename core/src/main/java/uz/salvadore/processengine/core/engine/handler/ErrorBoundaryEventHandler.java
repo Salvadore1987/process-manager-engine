@@ -7,7 +7,7 @@ import uz.salvadore.processengine.core.domain.model.FlowNode;
 import uz.salvadore.processengine.core.domain.model.SequenceFlow;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.context.ExecutionContext;
-import uz.salvadore.processengine.core.engine.eventsourcing.EventSequencer;
+import uz.salvadore.processengine.core.port.outgoing.SequenceGenerator;
 import uz.salvadore.processengine.core.util.UUIDv7;
 
 import java.time.Instant;
@@ -19,9 +19,9 @@ import java.util.List;
  */
 public final class ErrorBoundaryEventHandler implements NodeHandler {
 
-    private final EventSequencer eventSequencer;
+    private final SequenceGenerator eventSequencer;
 
-    public ErrorBoundaryEventHandler(EventSequencer eventSequencer) {
+    public ErrorBoundaryEventHandler(SequenceGenerator eventSequencer) {
         this.eventSequencer = eventSequencer;
     }
 

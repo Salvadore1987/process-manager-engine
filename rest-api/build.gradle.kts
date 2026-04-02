@@ -5,6 +5,7 @@ plugins {
 
 dependencies {
     implementation(project(":spring-integration"))
+    implementation(project(":redis-persistence"))
     implementation(project(":security"))
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.actuator)

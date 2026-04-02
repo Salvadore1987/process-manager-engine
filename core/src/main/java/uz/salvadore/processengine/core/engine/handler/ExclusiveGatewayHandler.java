@@ -7,7 +7,7 @@ import uz.salvadore.processengine.core.domain.model.SequenceFlow;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.condition.ConditionEvaluator;
 import uz.salvadore.processengine.core.engine.context.ExecutionContext;
-import uz.salvadore.processengine.core.engine.eventsourcing.EventSequencer;
+import uz.salvadore.processengine.core.port.outgoing.SequenceGenerator;
 import uz.salvadore.processengine.core.util.UUIDv7;
 
 import java.time.Instant;
@@ -21,9 +21,9 @@ import java.util.List;
 public final class ExclusiveGatewayHandler implements NodeHandler {
 
     private final ConditionEvaluator conditionEvaluator;
-    private final EventSequencer eventSequencer;
+    private final SequenceGenerator eventSequencer;
 
-    public ExclusiveGatewayHandler(ConditionEvaluator conditionEvaluator, EventSequencer eventSequencer) {
+    public ExclusiveGatewayHandler(ConditionEvaluator conditionEvaluator, SequenceGenerator eventSequencer) {
         this.conditionEvaluator = conditionEvaluator;
         this.eventSequencer = eventSequencer;
     }

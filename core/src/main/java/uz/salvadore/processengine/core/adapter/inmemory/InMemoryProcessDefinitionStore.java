@@ -1,7 +1,8 @@
-package uz.salvadore.processengine.core.engine;
+package uz.salvadore.processengine.core.adapter.inmemory;
 
 import uz.salvadore.processengine.core.domain.exception.DuplicateProcessDefinitionException;
 import uz.salvadore.processengine.core.domain.model.ProcessDefinition;
+import uz.salvadore.processengine.core.port.outgoing.ProcessDefinitionStore;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -14,11 +15,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * In-memory registry for deployed process definitions.
  * Supports versioning: multiple versions per key, lookup returns latest.
  */
-public final class ProcessDefinitionRepository {
+public final class InMemoryProcessDefinitionStore implements ProcessDefinitionStore {
 
     private final ConcurrentHashMap<UUID, ProcessDefinition> byId = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, List<ProcessDefinition>> byKey = new ConcurrentHashMap<>();
 
+    @Override
     public ProcessDefinition deploy(ProcessDefinition definition) {
         ProcessDefinition[] result = new ProcessDefinition[1];
 
@@ -49,6 +51,7 @@ public final class ProcessDefinitionRepository {
         return result[0];
     }
 
+    @Override
     public void undeploy(String key) {
         List<ProcessDefinition> removed = byKey.remove(key);
         if (removed != null) {
@@ -58,10 +61,12 @@ public final class ProcessDefinitionRepository {
         }
     }
 
+    @Override
     public Optional<ProcessDefinition> getById(UUID id) {
         return Optional.ofNullable(byId.get(id));
     }
 
+    @Override
     public Optional<ProcessDefinition> getByKey(String key) {
         List<ProcessDefinition> versions = byKey.get(key);
         if (versions == null || versions.isEmpty()) {
@@ -71,6 +76,7 @@ public final class ProcessDefinitionRepository {
                 .max(Comparator.comparingInt(ProcessDefinition::getVersion));
     }
 
+    @Override
     public List<ProcessDefinition> getVersions(String key) {
         List<ProcessDefinition> versions = byKey.get(key);
         if (versions == null) {
@@ -79,10 +85,12 @@ public final class ProcessDefinitionRepository {
         return List.copyOf(versions);
     }
 
+    @Override
     public List<ProcessDefinition> list() {
         return List.copyOf(byId.values());
     }
 
+    @Override
     public int size() {
         return byId.size();
     }

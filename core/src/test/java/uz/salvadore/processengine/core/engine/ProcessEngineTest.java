@@ -22,7 +22,9 @@ import uz.salvadore.processengine.core.domain.model.ServiceTask;
 import uz.salvadore.processengine.core.domain.model.StartEvent;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.condition.SimpleConditionEvaluator;
-import uz.salvadore.processengine.core.engine.eventsourcing.EventSequencer;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryInstanceDefinitionMapping;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessDefinitionStore;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemorySequenceGenerator;
 import uz.salvadore.processengine.core.engine.handler.CallActivityHandler;
 import uz.salvadore.processengine.core.engine.handler.CompensationBoundaryEventHandler;
 import uz.salvadore.processengine.core.engine.handler.EndEventHandler;
@@ -64,33 +66,33 @@ class ProcessEngineTest {
     }
 
     private InMemoryEventStore eventStore;
-    private ProcessDefinitionRepository definitionRepository;
-    private EventSequencer eventSequencer;
+    private InMemoryProcessDefinitionStore definitionStore;
+    private InMemorySequenceGenerator sequenceGenerator;
     private RecordingMessageTransport messageTransport;
     private ProcessEngine engine;
 
     @BeforeEach
     void setUp() {
         eventStore = new InMemoryEventStore();
-        definitionRepository = new ProcessDefinitionRepository();
-        eventSequencer = new EventSequencer();
+        definitionStore = new InMemoryProcessDefinitionStore();
+        sequenceGenerator = new InMemorySequenceGenerator();
         messageTransport = new RecordingMessageTransport();
 
         SimpleConditionEvaluator conditionEvaluator = new SimpleConditionEvaluator();
 
         Map<NodeType, NodeHandler> handlers = Map.ofEntries(
-                Map.entry(NodeType.START_EVENT, new StartEventHandler(eventSequencer)),
-                Map.entry(NodeType.END_EVENT, new EndEventHandler(eventSequencer)),
+                Map.entry(NodeType.START_EVENT, new StartEventHandler(sequenceGenerator)),
+                Map.entry(NodeType.END_EVENT, new EndEventHandler(sequenceGenerator)),
                 Map.entry(NodeType.SERVICE_TASK, new ServiceTaskHandler(messageTransport)),
-                Map.entry(NodeType.EXCLUSIVE_GATEWAY, new ExclusiveGatewayHandler(conditionEvaluator, eventSequencer)),
-                Map.entry(NodeType.PARALLEL_GATEWAY, new ParallelGatewayHandler(eventSequencer)),
-                Map.entry(NodeType.CALL_ACTIVITY, new CallActivityHandler(eventSequencer)),
-                Map.entry(NodeType.ERROR_BOUNDARY, new ErrorBoundaryEventHandler(eventSequencer)),
-                Map.entry(NodeType.COMPENSATION_BOUNDARY, new CompensationBoundaryEventHandler(eventSequencer))
+                Map.entry(NodeType.EXCLUSIVE_GATEWAY, new ExclusiveGatewayHandler(conditionEvaluator, sequenceGenerator)),
+                Map.entry(NodeType.PARALLEL_GATEWAY, new ParallelGatewayHandler(sequenceGenerator)),
+                Map.entry(NodeType.CALL_ACTIVITY, new CallActivityHandler(sequenceGenerator)),
+                Map.entry(NodeType.ERROR_BOUNDARY, new ErrorBoundaryEventHandler(sequenceGenerator)),
+                Map.entry(NodeType.COMPENSATION_BOUNDARY, new CompensationBoundaryEventHandler(sequenceGenerator))
         );
 
         TokenExecutor tokenExecutor = new TokenExecutor(handlers);
-        engine = new ProcessEngine(eventStore, definitionRepository, tokenExecutor, eventSequencer);
+        engine = new ProcessEngine(eventStore, definitionStore, tokenExecutor, sequenceGenerator, new InMemoryInstanceDefinitionMapping());
     }
 
     private ProcessDefinition createSimpleLinearProcess() {
@@ -119,7 +121,7 @@ class ProcessEngineTest {
             engine.deploy(definition);
 
             // Assert
-            assertThat(definitionRepository.getByKey("simple-process")).isPresent();
+            assertThat(definitionStore.getByKey("simple-process")).isPresent();
         }
     }
 

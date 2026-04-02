@@ -7,20 +7,11 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "process-engine")
 public class ProcessEngineProperties {
 
-    private final Persistence persistence = new Persistence();
     private final RabbitMq rabbitmq = new RabbitMq();
     private final Retry retry = new Retry();
 
-    public Persistence getPersistence() { return persistence; }
     public RabbitMq getRabbitmq() { return rabbitmq; }
     public Retry getRetry() { return retry; }
-
-    public static class Persistence {
-        private boolean enabled = false;
-
-        public boolean isEnabled() { return enabled; }
-        public void setEnabled(boolean enabled) { this.enabled = enabled; }
-    }
 
     public static class RabbitMq {
         private String host = "localhost";

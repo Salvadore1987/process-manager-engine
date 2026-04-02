@@ -6,7 +6,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
-import uz.salvadore.processengine.core.engine.ProcessDefinitionRepository;
+import uz.salvadore.processengine.core.port.outgoing.ProcessDefinitionStore;
 import uz.salvadore.processengine.core.engine.ProcessEngine;
 import uz.salvadore.processengine.core.parser.BpmnParser;
 import uz.salvadore.processengine.core.port.outgoing.ProcessEventStore;
@@ -44,7 +44,7 @@ class GlobalExceptionHandlerTest {
     private ProcessEngine processEngine;
 
     @MockBean
-    private ProcessDefinitionRepository definitionRepository;
+    private ProcessDefinitionStore definitionRepository;
 
     @MockBean
     private BpmnParser bpmnParser;
