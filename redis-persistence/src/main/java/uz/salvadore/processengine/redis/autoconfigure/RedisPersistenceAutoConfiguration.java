@@ -1,8 +1,6 @@
 package uz.salvadore.processengine.redis.autoconfigure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -23,26 +21,17 @@ import uz.salvadore.processengine.redis.RedisSequenceGenerator;
 public class RedisPersistenceAutoConfiguration {
 
     @Bean
-    @ConditionalOnMissingBean(name = "processEngineObjectMapper")
-    public ObjectMapper processEngineObjectMapper() {
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new JavaTimeModule());
-        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        return objectMapper;
-    }
-
-    @Bean
     @ConditionalOnMissingBean(ProcessEventStore.class)
     public ProcessEventStore redisEventStore(StringRedisTemplate redisTemplate,
-                                             ObjectMapper processEngineObjectMapper) {
-        return new RedisEventStore(redisTemplate, processEngineObjectMapper);
+                                             ObjectMapper objectMapper) {
+        return new RedisEventStore(redisTemplate, objectMapper);
     }
 
     @Bean
     @ConditionalOnMissingBean(ProcessDefinitionStore.class)
     public ProcessDefinitionStore redisProcessDefinitionStore(StringRedisTemplate redisTemplate,
-                                                               ObjectMapper processEngineObjectMapper) {
-        return new RedisProcessDefinitionStore(redisTemplate, processEngineObjectMapper);
+                                                               ObjectMapper objectMapper) {
+        return new RedisProcessDefinitionStore(redisTemplate, objectMapper);
     }
 
     @Bean
