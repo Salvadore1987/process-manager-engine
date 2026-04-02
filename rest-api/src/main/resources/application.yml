@@ -2,6 +2,10 @@ server:
   port: ${SERVER_PORT:8080}
 
 spring:
+  data:
+    redis:
+      host: ${PROCESS_ENGINE_REDIS_HOST:localhost}
+      port: ${PROCESS_ENGINE_REDIS_PORT:6379}
   threads:
     virtual:
       enabled: ${SPRING_THREADS_VIRTUAL_ENABLED:true}

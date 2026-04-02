@@ -7,7 +7,7 @@ Java 21 движок бизнес-процессов на основе **BPMN 2.
 - **BPMN 2.0 парсинг и валидация** — загрузка XML из Camunda Modeler с проверкой поддерживаемых элементов
 - **Token-based execution** — продвижение токенов по графу: StartEvent, EndEvent, ServiceTask, ExclusiveGateway, ParallelGateway, CallActivity, Boundary Events
 - **Error handling & Compensation** — маршрутизация ошибок через ErrorBoundaryEvent, автоматическая компенсация завершённых задач в обратном порядке (LIFO) при отсутствии error boundary
-- **Event Sourcing** — все изменения состояния записываются как события, состояние восстанавливается через replay
+- **Event Sourcing** — все изменения состояния записываются как события, состояние восстанавливается через replay, персистентность через Redis
 - **RabbitMQ транспорт** — каждый ServiceTask отправляет сообщения в свой topic, retry с exponential backoff, DLQ
 - **Spring Boot Starter** — автоконфигурация, health indicators, Micrometer метрики
 - **REST API** — полный Camunda-like API для управления процессами
@@ -29,14 +29,16 @@ Java 21 движок бизнес-процессов на основе **BPMN 2.
 ┌──────────────────────────▼──────────────────────────────────┐
 │                        core (standalone engine)              │
 │  BPMN Parser │ Token Engine │ Event Sourcing │ Conditions   │
-│  Ports: ProcessEventStore, MessageTransport, TimerService   │
-└──────────────┬──────────────────────────────────────────────┘
-               │
-┌──────────────▼──────────┐
-│   rabbitmq-transport    │
-│  AMQP Client │ Retry    │
-│  DLQ │ Timer queues     │
-└─────────────────────────┘
+│  Ports: ProcessEventStore, ProcessDefinitionStore,          │
+│         SequenceGenerator, InstanceDefinitionMapping,       │
+│         MessageTransport, TimerService                      │
+└──────────────┬───────────────────┬──────────────────────────┘
+               │                   │
+┌──────────────▼──────────┐ ┌──────▼──────────────────┐
+│   rabbitmq-transport    │ │   redis-persistence     │
+│  AMQP Client │ Retry    │ │  Event Store │ Def Store│
+│  DLQ │ Timer queues     │ │  Sequence Gen │ Mapping │
+└─────────────────────────┘ └─────────────────────────┘
 ```
 
 ### Модули
@@ -45,9 +47,11 @@ Java 21 движок бизнес-процессов на основе **BPMN 2.
 |--------|----------|
 | `core` | Standalone движок: BPMN-парсер, token engine, event sourcing, port-интерфейсы |
 | `rabbitmq-transport` | Реализация `MessageTransport` и `TimerService` поверх RabbitMQ |
+| `redis-persistence` | Redis-реализация `ProcessEventStore`, `ProcessDefinitionStore`, `SequenceGenerator`, `InstanceDefinitionMapping` |
 | `spring-integration` | Spring Boot Starter: auto-configuration, health indicators, метрики |
 | `security` | Spring Security OAuth2 Resource Server + Keycloak JWT интеграция |
 | `rest-api` | Spring Boot MVC приложение с REST API |
+| `worker-spring-boot-starter` | Starter для внешних worker-сервисов с аннотацией `@JobWorker` |
 
 ## Технологии
 
@@ -56,6 +60,7 @@ Java 21 движок бизнес-процессов на основе **BPMN 2.
 | Язык | Java 21 |
 | Сборка | Gradle 9.2 (Kotlin DSL) |
 | Транспорт | RabbitMQ (amqp-client 5.21) |
+| Персистентность | Redis (Spring Data Redis / Lettuce) |
 | XML-парсинг | JAXB (hand-crafted subset BPMN 2.0) |
 | REST | Spring Boot 3.3 + Virtual Threads |
 | Метрики | Micrometer + Prometheus |
@@ -74,8 +79,8 @@ Java 21 движок бизнес-процессов на основе **BPMN 2.
 git clone https://github.com/Salvadore1987/process-manager-engine
 cd process-manager-engine
 
-# Запуск RabbitMQ
-docker compose --env-file .env/local.env up -d rabbitmq
+# Запуск RabbitMQ + Redis
+docker compose --env-file .env/local.env up -d rabbitmq redis
 
 # Сборка и запуск приложения
 ./gradlew :rest-api:bootRun
@@ -83,6 +88,7 @@ docker compose --env-file .env/local.env up -d rabbitmq
 
 Приложение доступно на `http://localhost:8080`.
 RabbitMQ Management UI: `http://localhost:15672` (guest/guest).
+Redis: `localhost:6379`.
 
 ### 2. Запуск через Docker Compose (все сервисы)
 
@@ -110,7 +116,8 @@ curl -X POST http://localhost:8080/api/v1/instances \
 | Переменная окружения | Property | По умолчанию | Описание |
 |---------------------|----------|-------------|----------|
 | `SERVER_PORT` | `server.port` | `8080` | Порт HTTP-сервера |
-| `PROCESS_ENGINE_PERSISTENCE_ENABLED` | `process-engine.persistence.enabled` | `true` | Включить event store |
+| `PROCESS_ENGINE_REDIS_HOST` | `spring.data.redis.host` | `localhost` | Хост Redis |
+| `PROCESS_ENGINE_REDIS_PORT` | `spring.data.redis.port` | `6379` | Порт Redis |
 | `PROCESS_ENGINE_RABBITMQ_HOST` | `process-engine.rabbitmq.host` | `localhost` | Хост RabbitMQ |
 | `PROCESS_ENGINE_RABBITMQ_PORT` | `process-engine.rabbitmq.port` | `5672` | Порт RabbitMQ |
 | `PROCESS_ENGINE_RABBITMQ_USERNAME` | `process-engine.rabbitmq.username` | `guest` | Логин RabbitMQ |
@@ -538,6 +545,7 @@ Exchange: process-engine.timers (topic, durable)
 # Тесты одного модуля
 ./gradlew :core:test
 ./gradlew :rabbitmq-transport:test
+./gradlew :redis-persistence:test
 ./gradlew :spring-integration:test
 ./gradlew :rest-api:test
 
@@ -549,12 +557,13 @@ Exchange: process-engine.timers (topic, durable)
 
 | Модуль | Тесты |
 |--------|-------|
-| core | 201 |
+| core | 200 |
 | rabbitmq-transport | 49 (22 unit + 27 integration) |
-| spring-integration | 45 |
+| redis-persistence | 23 (Testcontainers Redis) |
+| spring-integration | 43 |
 | security | 42 |
 | rest-api | 52 (29 functional + 23 security) |
-| **Итого** | **389** |
+| **Итого** | **409** |
 
 ## Развёртывание
 
@@ -564,8 +573,8 @@ Exchange: process-engine.timers (topic, durable)
 # Все сервисы
 docker compose --env-file .env/local.env up -d
 
-# Только RabbitMQ + Keycloak (для локальной разработки)
-docker compose --env-file .env/local.env up -d rabbitmq keycloak
+# Только инфраструктура (для локальной разработки)
+docker compose --env-file .env/local.env up -d rabbitmq redis keycloak
 
 # Логи
 docker compose logs -f process-engine
@@ -584,6 +593,7 @@ java -jar rest-api/build/libs/rest-api-1.0-SNAPSHOT.jar
 ### Переменные окружения для production
 
 ```bash
+export PROCESS_ENGINE_REDIS_HOST=redis.prod.internal
 export PROCESS_ENGINE_RABBITMQ_HOST=rabbitmq.prod.internal
 export PROCESS_ENGINE_RABBITMQ_USERNAME=prod_user
 export PROCESS_ENGINE_RABBITMQ_PASSWORD=<secret>

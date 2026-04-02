@@ -16,6 +16,20 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7.4-alpine
+    container_name: process-engine-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
     container_name: process-engine-keycloak
@@ -45,15 +59,19 @@ services:
       - .env/local.env
     environment:
       PROCESS_ENGINE_RABBITMQ_HOST: rabbitmq
+      PROCESS_ENGINE_REDIS_HOST: redis
       KEYCLOAK_ISSUER_URI: http://keycloak:8180/realms/process-engine
     ports:
       - "${SERVER_PORT:-8080}:8080"
     depends_on:
       rabbitmq:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       keycloak:
         condition: service_healthy
 
 volumes:
   rabbitmq-data:
+  redis-data:
   keycloak-data:
