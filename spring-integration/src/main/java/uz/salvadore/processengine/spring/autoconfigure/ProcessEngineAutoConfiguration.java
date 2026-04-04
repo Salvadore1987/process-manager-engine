@@ -6,8 +6,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryActivityLog;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryInstanceDefinitionMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessDefinitionStore;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessInstanceLock;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemorySequenceGenerator;
 import uz.salvadore.processengine.core.domain.enums.NodeType;
 import uz.salvadore.processengine.core.engine.ProcessEngine;
@@ -24,11 +26,13 @@ import uz.salvadore.processengine.core.engine.handler.ParallelGatewayHandler;
 import uz.salvadore.processengine.core.engine.handler.ServiceTaskHandler;
 import uz.salvadore.processengine.core.engine.handler.StartEventHandler;
 import uz.salvadore.processengine.core.engine.handler.TimerBoundaryEventHandler;
+import uz.salvadore.processengine.core.port.outgoing.ActivityLog;
 import uz.salvadore.processengine.core.port.outgoing.DeploymentListener;
 import uz.salvadore.processengine.core.port.outgoing.InstanceDefinitionMapping;
 import uz.salvadore.processengine.core.port.outgoing.MessageTransport;
 import uz.salvadore.processengine.core.port.outgoing.ProcessDefinitionStore;
 import uz.salvadore.processengine.core.port.outgoing.ProcessEventStore;
+import uz.salvadore.processengine.core.port.outgoing.ProcessInstanceLock;
 import uz.salvadore.processengine.core.port.outgoing.SequenceGenerator;
 import uz.salvadore.processengine.core.port.outgoing.TimerService;
 import uz.salvadore.processengine.rabbitmq.RabbitMqTopologyInitializer;
@@ -66,6 +70,18 @@ public class ProcessEngineAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public ProcessInstanceLock processInstanceLock() {
+        return new InMemoryProcessInstanceLock();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ActivityLog activityLog() {
+        return new InMemoryActivityLog();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public TokenExecutor tokenExecutor(SequenceGenerator sequenceGenerator,
                                        ConditionEvaluator conditionEvaluator,
                                        MessageTransport messageTransport,
@@ -91,9 +107,11 @@ public class ProcessEngineAutoConfiguration {
                                        TokenExecutor tokenExecutor,
                                        SequenceGenerator sequenceGenerator,
                                        InstanceDefinitionMapping instanceDefinitionMapping,
+                                       ProcessInstanceLock processInstanceLock,
+                                       ActivityLog activityLog,
                                        List<DeploymentListener> deploymentListeners) {
         return new ProcessEngine(eventStore, definitionStore, tokenExecutor, sequenceGenerator,
-                instanceDefinitionMapping, deploymentListeners);
+                instanceDefinitionMapping, processInstanceLock, activityLog, deploymentListeners);
     }
 
     @Bean
@@ -106,13 +124,35 @@ public class ProcessEngineAutoConfiguration {
         return new RabbitMqDeploymentListener(
                 topologyInitializer,
                 messageTransport,
-                result -> {
-                    if (result.success()) {
-                        processEngineProvider.getObject().completeTask(result.correlationId(), result.payload());
-                    } else {
-                        processEngineProvider.getObject().failTask(result.correlationId(), result.errorCode(), String.valueOf(result.payload().get("message")));
-                    }
-                }
+                taskResultCallback(processEngineProvider)
         );
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "rabbitMqSubscriptionRecovery")
+    @ConditionalOnBean(RabbitMqTopologyInitializer.class)
+    public RabbitMqSubscriptionRecovery rabbitMqSubscriptionRecovery(
+            ProcessDefinitionStore definitionStore,
+            RabbitMqTopologyInitializer topologyInitializer,
+            MessageTransport messageTransport,
+            ObjectProvider<ProcessEngine> processEngineProvider) {
+        return new RabbitMqSubscriptionRecovery(
+                definitionStore,
+                topologyInitializer,
+                messageTransport,
+                taskResultCallback(processEngineProvider)
+        );
+    }
+
+    private java.util.function.Consumer<MessageTransport.MessageResult> taskResultCallback(
+            ObjectProvider<ProcessEngine> processEngineProvider) {
+        return result -> {
+            if (result.success()) {
+                processEngineProvider.getObject().completeTask(result.correlationId(), result.payload());
+            } else {
+                processEngineProvider.getObject().failTask(result.correlationId(), result.errorCode(),
+                        String.valueOf(result.payload().get("message")));
+            }
+        };
     }
 }

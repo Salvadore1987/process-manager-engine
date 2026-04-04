@@ -13,8 +13,10 @@ import uz.salvadore.processengine.core.domain.model.ProcessDefinition;
 import uz.salvadore.processengine.core.domain.model.ProcessInstance;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.condition.SimpleConditionEvaluator;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryActivityLog;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryInstanceDefinitionMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessDefinitionStore;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessInstanceLock;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemorySequenceGenerator;
 import uz.salvadore.processengine.core.engine.handler.CallActivityHandler;
 import uz.salvadore.processengine.core.engine.handler.CompensationBoundaryEventHandler;
@@ -104,7 +106,7 @@ class CompensationE2ETest {
         );
 
         TokenExecutor tokenExecutor = new TokenExecutor(handlers);
-        engine = new ProcessEngine(eventStore, definitionStore, tokenExecutor, sequenceGenerator, new InMemoryInstanceDefinitionMapping());
+        engine = new ProcessEngine(eventStore, definitionStore, tokenExecutor, sequenceGenerator, new InMemoryInstanceDefinitionMapping(), new InMemoryProcessInstanceLock(), new InMemoryActivityLog());
 
         // Parse and deploy the order-process BPMN
         BpmnParser parser = new BpmnParser();
