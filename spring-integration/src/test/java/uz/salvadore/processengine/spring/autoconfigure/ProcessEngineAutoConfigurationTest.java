@@ -11,9 +11,11 @@ import uz.salvadore.processengine.core.engine.ProcessEngine;
 import uz.salvadore.processengine.core.engine.TokenExecutor;
 import uz.salvadore.processengine.core.engine.condition.ConditionEvaluator;
 import uz.salvadore.processengine.core.engine.condition.SimpleConditionEvaluator;
+import uz.salvadore.processengine.core.port.outgoing.ActivityLog;
 import uz.salvadore.processengine.core.port.outgoing.InstanceDefinitionMapping;
 import uz.salvadore.processengine.core.port.outgoing.MessageTransport;
 import uz.salvadore.processengine.core.port.outgoing.ProcessDefinitionStore;
+import uz.salvadore.processengine.core.port.outgoing.ProcessInstanceLock;
 import uz.salvadore.processengine.core.port.outgoing.SequenceGenerator;
 import uz.salvadore.processengine.core.port.outgoing.TimerService;
 
@@ -86,6 +88,22 @@ class ProcessEngineAutoConfigurationTest {
         void createsInstanceDefinitionMappingBean() {
             contextRunner.run(context -> {
                 assertThat(context).hasSingleBean(InstanceDefinitionMapping.class);
+            });
+        }
+
+        @Test
+        @DisplayName("creates ProcessInstanceLock bean")
+        void createsProcessInstanceLockBean() {
+            contextRunner.run(context -> {
+                assertThat(context).hasSingleBean(ProcessInstanceLock.class);
+            });
+        }
+
+        @Test
+        @DisplayName("creates ActivityLog bean")
+        void createsActivityLogBean() {
+            contextRunner.run(context -> {
+                assertThat(context).hasSingleBean(ActivityLog.class);
             });
         }
 

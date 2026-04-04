@@ -7,16 +7,23 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import uz.salvadore.processengine.core.port.outgoing.ActivityLog;
 import uz.salvadore.processengine.core.port.outgoing.InstanceDefinitionMapping;
 import uz.salvadore.processengine.core.port.outgoing.ProcessDefinitionStore;
 import uz.salvadore.processengine.core.port.outgoing.ProcessEventStore;
+import uz.salvadore.processengine.core.port.outgoing.ProcessInstanceLock;
 import uz.salvadore.processengine.core.port.outgoing.SequenceGenerator;
 import uz.salvadore.processengine.redis.RedisEventStore;
+import uz.salvadore.processengine.redis.RedisActivityLog;
 import uz.salvadore.processengine.redis.RedisInstanceDefinitionMapping;
 import uz.salvadore.processengine.redis.RedisProcessDefinitionStore;
+import uz.salvadore.processengine.redis.RedisProcessInstanceLock;
 import uz.salvadore.processengine.redis.RedisSequenceGenerator;
 
-@AutoConfiguration
+@AutoConfiguration(beforeName = {
+        "uz.salvadore.processengine.spring.autoconfigure.EventStoreAutoConfiguration",
+        "uz.salvadore.processengine.spring.autoconfigure.ProcessEngineAutoConfiguration"
+})
 @ConditionalOnClass(RedisConnectionFactory.class)
 public class RedisPersistenceAutoConfiguration {
 
@@ -44,5 +51,18 @@ public class RedisPersistenceAutoConfiguration {
     @ConditionalOnMissingBean(InstanceDefinitionMapping.class)
     public InstanceDefinitionMapping redisInstanceDefinitionMapping(StringRedisTemplate redisTemplate) {
         return new RedisInstanceDefinitionMapping(redisTemplate);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ProcessInstanceLock.class)
+    public ProcessInstanceLock redisProcessInstanceLock(StringRedisTemplate redisTemplate) {
+        return new RedisProcessInstanceLock(redisTemplate);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ActivityLog.class)
+    public ActivityLog redisActivityLog(StringRedisTemplate redisTemplate,
+                                        ObjectMapper objectMapper) {
+        return new RedisActivityLog(redisTemplate, objectMapper);
     }
 }

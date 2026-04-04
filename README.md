@@ -8,7 +8,9 @@ Java 21 движок бизнес-процессов на основе **BPMN 2.
 - **Token-based execution** — продвижение токенов по графу: StartEvent, EndEvent, ServiceTask, ExclusiveGateway, ParallelGateway, CallActivity, Boundary Events
 - **Error handling & Compensation** — маршрутизация ошибок через ErrorBoundaryEvent, автоматическая компенсация завершённых задач в обратном порядке (LIFO) при отсутствии error boundary
 - **Event Sourcing** — все изменения состояния записываются как события, состояние восстанавливается через replay, персистентность через Redis
+- **Activity Log** — отдельный Redis Hash (`pe:activity-log:{id}`) с бизнес-шагами процесса для отладки
 - **RabbitMQ транспорт** — каждый ServiceTask отправляет сообщения в свой topic, retry с exponential backoff, DLQ
+- **Distributed Locking** — per-instance lock через Redis (SET NX PX) для безопасного concurrent execution
 - **Spring Boot Starter** — автоконфигурация, health indicators, Micrometer метрики
 - **REST API** — полный Camunda-like API для управления процессами
 - **Virtual Threads** — Java 21 virtual threads для масштабируемости
@@ -31,13 +33,14 @@ Java 21 движок бизнес-процессов на основе **BPMN 2.
 │  BPMN Parser │ Token Engine │ Event Sourcing │ Conditions   │
 │  Ports: ProcessEventStore, ProcessDefinitionStore,          │
 │         SequenceGenerator, InstanceDefinitionMapping,       │
+│         ProcessInstanceLock, ActivityLog,                    │
 │         MessageTransport, TimerService                      │
 └──────────────┬───────────────────┬──────────────────────────┘
                │                   │
 ┌──────────────▼──────────┐ ┌──────▼──────────────────┐
 │   rabbitmq-transport    │ │   redis-persistence     │
-│  AMQP Client │ Retry    │ │  Event Store │ Def Store│
-│  DLQ │ Timer queues     │ │  Sequence Gen │ Mapping │
+│  AMQP Client │ Retry    │ │  EventStore │ DefStore │
+│  DLQ │ Timer queues     │ │  Lock │ ActivityLog    │
 └─────────────────────────┘ └─────────────────────────┘
 ```
 
@@ -47,7 +50,7 @@ Java 21 движок бизнес-процессов на основе **BPMN 2.
 |--------|----------|
 | `core` | Standalone движок: BPMN-парсер, token engine, event sourcing, port-интерфейсы |
 | `rabbitmq-transport` | Реализация `MessageTransport` и `TimerService` поверх RabbitMQ |
-| `redis-persistence` | Redis-реализация `ProcessEventStore`, `ProcessDefinitionStore`, `SequenceGenerator`, `InstanceDefinitionMapping` |
+| `redis-persistence` | Redis-реализация `ProcessEventStore`, `ProcessDefinitionStore`, `SequenceGenerator`, `InstanceDefinitionMapping`, `ProcessInstanceLock`, `ActivityLog` |
 | `spring-integration` | Spring Boot Starter: auto-configuration, health indicators, метрики |
 | `security` | Spring Security OAuth2 Resource Server + Keycloak JWT интеграция |
 | `rest-api` | Spring Boot MVC приложение с REST API |
@@ -513,6 +516,43 @@ Content-Type: application/json
 | `CompensationBoundaryEvent` | Компенсация при откате |
 
 Элементы вне этого списка (UserTask, ScriptTask, SubProcess и т.д.) отклоняются при валидации.
+
+## Redis Data Model
+
+| Ключ | Тип | Описание |
+|------|-----|----------|
+| `pe:events:{instanceId}` | List | Event sourcing: все события процесса (JSON) |
+| `pe:def:id:{uuid}` | String | Process definition по ID (JSON) |
+| `pe:def:key:{key}` | List | Версии definition по ключу |
+| `pe:def:all` | Set | Все ID определений |
+| `pe:seq:{instanceId}` | String | Счётчик sequence number (INCR) |
+| `pe:inst-def:{instanceId}` | String | Маппинг instance → definition ID |
+| `pe:instances` | Set | Все ID процессов |
+| `pe:lock:{instanceId}` | String | Distributed lock (SET NX PX 30s) |
+| `pe:activity-log:{instanceId}` | Hash | Бизнес-лог: field=nodeId, value=JSON со статусом задачи |
+
+### Activity Log
+
+Отдельный Redis Hash для отладки — только бизнес-шаги (ServiceTask/CallActivity), не внутренние события движка:
+
+```bash
+redis-cli HGETALL pe:activity-log:{instanceId}
+
+validate-order  → {"nodeId":"validate-order","topic":"order.validate","status":"COMPLETED","startedAt":"...","completedAt":"..."}
+book-order      → {"nodeId":"book-order","topic":"order.book","status":"COMPLETED",...}
+charge-payment  → {"nodeId":"charge-payment","topic":"order.payment.charge","status":"COMPLETED",...}
+deliver-order   → {"nodeId":"deliver-order","topic":"order.deliver","status":"FAILED","errorCode":"..."}
+_process        → {"status":"ERROR","errorCode":"...","occurredAt":"..."}
+```
+
+### Валидация процесса
+
+Python-скрипт для проверки что все задачи BPMN-диаграммы были выполнен��:
+
+```bash
+pip install redis
+python3 docs/validate_process.py <bpmn_file> <process_instance_id>
+```
 
 ## RabbitMQ Topology
 
