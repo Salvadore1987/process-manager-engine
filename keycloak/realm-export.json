@@ -80,6 +80,27 @@
         "roles",
         "email"
       ]
+    },
+    {
+      "clientId": "order-service",
+      "name": "Order Service Client",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect",
+      "secret": "order-service-secret",
+      "attributes": {
+        "access.token.lifespan": "600"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ]
     }
   ],
   "users": [

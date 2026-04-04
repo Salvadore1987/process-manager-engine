@@ -26,6 +26,7 @@ import uz.salvadore.processengine.core.engine.handler.ParallelGatewayHandler;
 import uz.salvadore.processengine.core.engine.handler.ServiceTaskHandler;
 import uz.salvadore.processengine.core.engine.handler.StartEventHandler;
 import uz.salvadore.processengine.core.engine.handler.TimerBoundaryEventHandler;
+import uz.salvadore.processengine.core.engine.handler.TimerIntermediateCatchEventHandler;
 import uz.salvadore.processengine.core.port.outgoing.ActivityLog;
 import uz.salvadore.processengine.core.port.outgoing.DeploymentListener;
 import uz.salvadore.processengine.core.port.outgoing.InstanceDefinitionMapping;
@@ -84,16 +85,17 @@ public class ProcessEngineAutoConfiguration {
                                        ConditionEvaluator conditionEvaluator,
                                        MessageTransport messageTransport,
                                        TimerService timerService) {
-        Map<NodeType, NodeHandler> handlers = Map.of(
-                NodeType.START_EVENT, new StartEventHandler(sequenceGenerator),
-                NodeType.END_EVENT, new EndEventHandler(sequenceGenerator),
-                NodeType.SERVICE_TASK, new ServiceTaskHandler(messageTransport),
-                NodeType.EXCLUSIVE_GATEWAY, new ExclusiveGatewayHandler(conditionEvaluator, sequenceGenerator),
-                NodeType.PARALLEL_GATEWAY, new ParallelGatewayHandler(sequenceGenerator),
-                NodeType.CALL_ACTIVITY, new CallActivityHandler(sequenceGenerator),
-                NodeType.TIMER_BOUNDARY, new TimerBoundaryEventHandler(timerService, sequenceGenerator),
-                NodeType.ERROR_BOUNDARY, new ErrorBoundaryEventHandler(sequenceGenerator),
-                NodeType.COMPENSATION_BOUNDARY, new CompensationBoundaryEventHandler(sequenceGenerator)
+        Map<NodeType, NodeHandler> handlers = Map.ofEntries(
+                Map.entry(NodeType.START_EVENT, new StartEventHandler(sequenceGenerator)),
+                Map.entry(NodeType.END_EVENT, new EndEventHandler(sequenceGenerator)),
+                Map.entry(NodeType.SERVICE_TASK, new ServiceTaskHandler(messageTransport)),
+                Map.entry(NodeType.EXCLUSIVE_GATEWAY, new ExclusiveGatewayHandler(conditionEvaluator, sequenceGenerator)),
+                Map.entry(NodeType.PARALLEL_GATEWAY, new ParallelGatewayHandler(sequenceGenerator)),
+                Map.entry(NodeType.CALL_ACTIVITY, new CallActivityHandler(sequenceGenerator)),
+                Map.entry(NodeType.TIMER_BOUNDARY, new TimerBoundaryEventHandler(timerService, sequenceGenerator)),
+                Map.entry(NodeType.TIMER_INTERMEDIATE_CATCH, new TimerIntermediateCatchEventHandler(timerService, sequenceGenerator)),
+                Map.entry(NodeType.ERROR_BOUNDARY, new ErrorBoundaryEventHandler(sequenceGenerator)),
+                Map.entry(NodeType.COMPENSATION_BOUNDARY, new CompensationBoundaryEventHandler(sequenceGenerator))
         );
         return new TokenExecutor(handlers);
     }

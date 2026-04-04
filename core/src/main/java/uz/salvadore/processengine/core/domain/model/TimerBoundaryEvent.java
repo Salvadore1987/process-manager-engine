@@ -2,7 +2,6 @@ package uz.salvadore.processengine.core.domain.model;
 
 import uz.salvadore.processengine.core.domain.enums.NodeType;
 
-import java.time.Duration;
 import java.util.List;
 
 public record TimerBoundaryEvent(
@@ -11,7 +10,7 @@ public record TimerBoundaryEvent(
         List<String> incomingFlows,
         List<String> outgoingFlows,
         String attachedToRef,
-        Duration duration,
+        TimerDefinition timerDefinition,
         boolean cancelActivity
 ) implements FlowNode {
 

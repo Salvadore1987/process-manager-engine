@@ -14,11 +14,25 @@ public class BpmnTimerEventDefinition {
     @XmlElement(name = "timeDuration", namespace = BpmnNamespaces.BPMN)
     private BpmnTimeDuration timeDuration;
 
+    @XmlElement(name = "timeDate", namespace = BpmnNamespaces.BPMN)
+    private BpmnTimeDuration timeDate;
+
+    @XmlElement(name = "timeCycle", namespace = BpmnNamespaces.BPMN)
+    private BpmnTimeDuration timeCycle;
+
     public String getId() {
         return id;
     }
 
     public BpmnTimeDuration getTimeDuration() {
         return timeDuration;
+    }
+
+    public BpmnTimeDuration getTimeDate() {
+        return timeDate;
+    }
+
+    public BpmnTimeDuration getTimeCycle() {
+        return timeCycle;
     }
 }

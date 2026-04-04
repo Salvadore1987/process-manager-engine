@@ -2,6 +2,7 @@ package uz.salvadore.processengine.core.engine.handler;
 
 import uz.salvadore.processengine.core.domain.event.ProcessEvent;
 import uz.salvadore.processengine.core.domain.event.TokenMovedEvent;
+import uz.salvadore.processengine.core.domain.model.ExclusiveGateway;
 import uz.salvadore.processengine.core.domain.model.FlowNode;
 import uz.salvadore.processengine.core.domain.model.SequenceFlow;
 import uz.salvadore.processengine.core.domain.model.Token;
@@ -16,7 +17,8 @@ import java.util.List;
 /**
  * Handles ExclusiveGateway: evaluates conditions on outgoing flows
  * and routes the token to the first matching flow.
- * Flows without conditions act as default paths (evaluated last).
+ * Supports explicit default flow via defaultFlowId attribute,
+ * with fallback to implicit default (flow without condition).
  */
 public final class ExclusiveGatewayHandler implements NodeHandler {
 
@@ -30,15 +32,24 @@ public final class ExclusiveGatewayHandler implements NodeHandler {
 
     @Override
     public List<ProcessEvent> handle(Token token, FlowNode node, ExecutionContext context) {
+        ExclusiveGateway gateway = (ExclusiveGateway) node;
         List<SequenceFlow> outgoingFlows = context.findOutgoingFlows(node.id());
         if (outgoingFlows.isEmpty()) {
             throw new IllegalStateException("ExclusiveGateway '" + node.id() + "' has no outgoing flows");
         }
 
+        String defaultFlowId = gateway.defaultFlowId();
         SequenceFlow defaultFlow = null;
+
         for (SequenceFlow flow : outgoingFlows) {
-            if (flow.conditionExpression() == null) {
+            if (flow.id().equals(defaultFlowId)) {
                 defaultFlow = flow;
+                continue;
+            }
+            if (flow.conditionExpression() == null) {
+                if (defaultFlow == null) {
+                    defaultFlow = flow;
+                }
                 continue;
             }
             if (conditionEvaluator.evaluate(flow.conditionExpression().expression(), context.getVariables())) {

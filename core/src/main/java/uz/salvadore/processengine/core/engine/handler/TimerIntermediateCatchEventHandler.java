@@ -3,8 +3,8 @@ package uz.salvadore.processengine.core.engine.handler;
 import uz.salvadore.processengine.core.domain.event.ProcessEvent;
 import uz.salvadore.processengine.core.domain.event.TimerScheduledEvent;
 import uz.salvadore.processengine.core.domain.model.FlowNode;
-import uz.salvadore.processengine.core.domain.model.TimerBoundaryEvent;
 import uz.salvadore.processengine.core.domain.model.TimerDefinition;
+import uz.salvadore.processengine.core.domain.model.TimerIntermediateCatchEvent;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.context.ExecutionContext;
 import uz.salvadore.processengine.core.port.outgoing.SequenceGenerator;
@@ -16,23 +16,23 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Handles TimerBoundaryEvent: schedules a timer via TimerService.
- * When the timer fires, the attached task is cancelled (if cancelActivity=true)
- * and the flow is redirected to the timer's outgoing path.
+ * Handles Timer Intermediate Catch Event: schedules a timer via TimerService.
+ * The token remains in WAITING state until the timer fires, then advances
+ * to the next node along the outgoing sequence flow.
  */
-public final class TimerBoundaryEventHandler implements NodeHandler {
+public final class TimerIntermediateCatchEventHandler implements NodeHandler {
 
     private final TimerService timerService;
     private final SequenceGenerator eventSequencer;
 
-    public TimerBoundaryEventHandler(TimerService timerService, SequenceGenerator eventSequencer) {
+    public TimerIntermediateCatchEventHandler(TimerService timerService, SequenceGenerator eventSequencer) {
         this.timerService = timerService;
         this.eventSequencer = eventSequencer;
     }
 
     @Override
     public List<ProcessEvent> handle(Token token, FlowNode node, ExecutionContext context) {
-        TimerBoundaryEvent timerEvent = (TimerBoundaryEvent) node;
+        TimerIntermediateCatchEvent timerEvent = (TimerIntermediateCatchEvent) node;
         TimerDefinition timerDef = timerEvent.timerDefinition();
 
         Duration scheduleDuration = switch (timerDef.type()) {

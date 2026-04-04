@@ -13,6 +13,8 @@ import uz.salvadore.processengine.core.domain.model.SequenceFlow;
 import uz.salvadore.processengine.core.domain.model.ServiceTask;
 import uz.salvadore.processengine.core.domain.model.StartEvent;
 import uz.salvadore.processengine.core.domain.model.TimerBoundaryEvent;
+import uz.salvadore.processengine.core.domain.model.TimerDefinition;
+import uz.salvadore.processengine.core.domain.model.TimerIntermediateCatchEvent;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -70,7 +72,8 @@ class BpmnParserTest {
 
         TimerBoundaryEvent timerBoundary = (TimerBoundaryEvent) nodesById.get("BoundaryEvent_StockTimeout");
         assertThat(timerBoundary.attachedToRef()).isEqualTo("Task_ReserveStock");
-        assertThat(timerBoundary.duration()).isEqualTo(Duration.ofMinutes(30));
+        assertThat(timerBoundary.timerDefinition().type()).isEqualTo(TimerDefinition.TimerType.DURATION);
+        assertThat(timerBoundary.timerDefinition().asDuration()).isEqualTo(Duration.ofMinutes(30));
         assertThat(timerBoundary.cancelActivity()).isTrue();
 
         ErrorBoundaryEvent errorBoundary = (ErrorBoundaryEvent) nodesById.get("BoundaryEvent_PaymentError");
@@ -146,6 +149,171 @@ class BpmnParserTest {
         assertThatThrownBy(() -> parser.parse(bpmnXml))
                 .isInstanceOf(BpmnParseException.class)
                 .hasMessageContaining("unsupported elements");
+    }
+
+    @Test
+    void shouldParseTimerIntermediateCatchEventWithDuration() {
+        // Arrange
+        String bpmnXml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                                  id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+                  <bpmn:process id="timer-process" name="Timer Process" isExecutable="true">
+                    <bpmn:startEvent id="start"><bpmn:outgoing>f1</bpmn:outgoing></bpmn:startEvent>
+                    <bpmn:intermediateCatchEvent id="timer1" name="Wait 5s">
+                      <bpmn:incoming>f1</bpmn:incoming><bpmn:outgoing>f2</bpmn:outgoing>
+                      <bpmn:timerEventDefinition>
+                        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT5S</bpmn:timeDuration>
+                      </bpmn:timerEventDefinition>
+                    </bpmn:intermediateCatchEvent>
+                    <bpmn:endEvent id="end"><bpmn:incoming>f2</bpmn:incoming></bpmn:endEvent>
+                    <bpmn:sequenceFlow id="f1" sourceRef="start" targetRef="timer1"/>
+                    <bpmn:sequenceFlow id="f2" sourceRef="timer1" targetRef="end"/>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        // Act
+        List<ProcessDefinition> definitions = parser.parse(bpmnXml);
+
+        // Assert
+        ProcessDefinition definition = definitions.getFirst();
+        Map<String, FlowNode> nodesById = definition.getFlowNodes().stream()
+                .collect(Collectors.toMap(FlowNode::id, Function.identity()));
+
+        assertThat(nodesById.get("timer1")).isInstanceOf(TimerIntermediateCatchEvent.class);
+        TimerIntermediateCatchEvent timer = (TimerIntermediateCatchEvent) nodesById.get("timer1");
+        assertThat(timer.name()).isEqualTo("Wait 5s");
+        assertThat(timer.timerDefinition().type()).isEqualTo(TimerDefinition.TimerType.DURATION);
+        assertThat(timer.timerDefinition().value()).isEqualTo("PT5S");
+    }
+
+    @Test
+    void shouldParseTimerIntermediateCatchEventWithDate() {
+        // Arrange
+        String bpmnXml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                                  id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+                  <bpmn:process id="timer-process" isExecutable="true">
+                    <bpmn:startEvent id="start"><bpmn:outgoing>f1</bpmn:outgoing></bpmn:startEvent>
+                    <bpmn:intermediateCatchEvent id="timer1">
+                      <bpmn:incoming>f1</bpmn:incoming><bpmn:outgoing>f2</bpmn:outgoing>
+                      <bpmn:timerEventDefinition>
+                        <bpmn:timeDate xsi:type="bpmn:tFormalExpression">2026-04-10T12:00:00Z</bpmn:timeDate>
+                      </bpmn:timerEventDefinition>
+                    </bpmn:intermediateCatchEvent>
+                    <bpmn:endEvent id="end"><bpmn:incoming>f2</bpmn:incoming></bpmn:endEvent>
+                    <bpmn:sequenceFlow id="f1" sourceRef="start" targetRef="timer1"/>
+                    <bpmn:sequenceFlow id="f2" sourceRef="timer1" targetRef="end"/>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        // Act
+        List<ProcessDefinition> definitions = parser.parse(bpmnXml);
+
+        // Assert
+        TimerIntermediateCatchEvent timer = (TimerIntermediateCatchEvent) definitions.getFirst()
+                .getFlowNodes().stream().filter(n -> n.id().equals("timer1")).findFirst().orElseThrow();
+        assertThat(timer.timerDefinition().type()).isEqualTo(TimerDefinition.TimerType.DATE);
+        assertThat(timer.timerDefinition().value()).isEqualTo("2026-04-10T12:00:00Z");
+    }
+
+    @Test
+    void shouldParseTimerIntermediateCatchEventWithCycle() {
+        // Arrange
+        String bpmnXml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                                  id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+                  <bpmn:process id="timer-process" isExecutable="true">
+                    <bpmn:startEvent id="start"><bpmn:outgoing>f1</bpmn:outgoing></bpmn:startEvent>
+                    <bpmn:intermediateCatchEvent id="timer1">
+                      <bpmn:incoming>f1</bpmn:incoming><bpmn:outgoing>f2</bpmn:outgoing>
+                      <bpmn:timerEventDefinition>
+                        <bpmn:timeCycle xsi:type="bpmn:tFormalExpression">R3/PT10H</bpmn:timeCycle>
+                      </bpmn:timerEventDefinition>
+                    </bpmn:intermediateCatchEvent>
+                    <bpmn:endEvent id="end"><bpmn:incoming>f2</bpmn:incoming></bpmn:endEvent>
+                    <bpmn:sequenceFlow id="f1" sourceRef="start" targetRef="timer1"/>
+                    <bpmn:sequenceFlow id="f2" sourceRef="timer1" targetRef="end"/>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        // Act
+        List<ProcessDefinition> definitions = parser.parse(bpmnXml);
+
+        // Assert
+        TimerIntermediateCatchEvent timer = (TimerIntermediateCatchEvent) definitions.getFirst()
+                .getFlowNodes().stream().filter(n -> n.id().equals("timer1")).findFirst().orElseThrow();
+        assertThat(timer.timerDefinition().type()).isEqualTo(TimerDefinition.TimerType.CYCLE);
+        assertThat(timer.timerDefinition().value()).isEqualTo("R3/PT10H");
+    }
+
+    @Test
+    void shouldParseExclusiveGatewayWithDefaultAttribute() {
+        // Arrange
+        String bpmnXml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                                  id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+                  <bpmn:process id="gw-process" isExecutable="true">
+                    <bpmn:startEvent id="start"><bpmn:outgoing>f1</bpmn:outgoing></bpmn:startEvent>
+                    <bpmn:exclusiveGateway id="gw1" default="f3">
+                      <bpmn:incoming>f1</bpmn:incoming>
+                      <bpmn:outgoing>f2</bpmn:outgoing>
+                      <bpmn:outgoing>f3</bpmn:outgoing>
+                    </bpmn:exclusiveGateway>
+                    <bpmn:endEvent id="end1"><bpmn:incoming>f2</bpmn:incoming></bpmn:endEvent>
+                    <bpmn:endEvent id="end2"><bpmn:incoming>f3</bpmn:incoming></bpmn:endEvent>
+                    <bpmn:sequenceFlow id="f1" sourceRef="start" targetRef="gw1"/>
+                    <bpmn:sequenceFlow id="f2" sourceRef="gw1" targetRef="end1">
+                      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${x > 10}</bpmn:conditionExpression>
+                    </bpmn:sequenceFlow>
+                    <bpmn:sequenceFlow id="f3" sourceRef="gw1" targetRef="end2"/>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        // Act
+        List<ProcessDefinition> definitions = parser.parse(bpmnXml);
+
+        // Assert
+        ExclusiveGateway gateway = (ExclusiveGateway) definitions.getFirst()
+                .getFlowNodes().stream().filter(n -> n.id().equals("gw1")).findFirst().orElseThrow();
+        assertThat(gateway.defaultFlowId()).isEqualTo("f3");
+    }
+
+    @Test
+    void shouldParseChargePaymentSubprocess() {
+        // Arrange
+        String bpmnXml = loadBpmn("bpmn/charge-payment-subprocess.bpmn");
+
+        // Act
+        List<ProcessDefinition> definitions = parser.parse(bpmnXml);
+
+        // Assert
+        assertThat(definitions).hasSize(1);
+        ProcessDefinition definition = definitions.getFirst();
+        assertThat(definition.getKey()).isEqualTo("charge-payment-subprocess");
+
+        Map<String, FlowNode> nodesById = definition.getFlowNodes().stream()
+                .collect(Collectors.toMap(FlowNode::id, Function.identity()));
+
+        assertThat(nodesById.get("charge-wait")).isInstanceOf(TimerIntermediateCatchEvent.class);
+        TimerIntermediateCatchEvent timer = (TimerIntermediateCatchEvent) nodesById.get("charge-wait");
+        assertThat(timer.timerDefinition().type()).isEqualTo(TimerDefinition.TimerType.DURATION);
+        assertThat(timer.timerDefinition().value()).isEqualTo("PT5S");
+
+        assertThat(nodesById.get("payment-success")).isInstanceOf(ExclusiveGateway.class);
+        ExclusiveGateway gateway = (ExclusiveGateway) nodesById.get("payment-success");
+        assertThat(gateway.defaultFlowId()).isEqualTo("Flow_18ud5gi");
     }
 
     @Test

@@ -13,6 +13,7 @@ import uz.salvadore.processengine.core.domain.event.ProcessStartedEvent;
 import uz.salvadore.processengine.core.domain.event.ProcessSuspendedEvent;
 import uz.salvadore.processengine.core.domain.event.TaskCompletedEvent;
 import uz.salvadore.processengine.core.domain.event.TokenMovedEvent;
+import uz.salvadore.processengine.core.domain.event.TimerFiredEvent;
 import uz.salvadore.processengine.core.domain.event.TokenWaitingEvent;
 import uz.salvadore.processengine.core.domain.model.CallActivity;
 import uz.salvadore.processengine.core.domain.model.CompensationBoundaryEvent;
@@ -22,6 +23,7 @@ import uz.salvadore.processengine.core.domain.model.ProcessDefinition;
 import uz.salvadore.processengine.core.domain.model.ProcessInstance;
 import uz.salvadore.processengine.core.domain.model.SequenceFlow;
 import uz.salvadore.processengine.core.domain.model.ServiceTask;
+import uz.salvadore.processengine.core.domain.model.TimerIntermediateCatchEvent;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.context.ExecutionContext;
 import uz.salvadore.processengine.core.engine.eventsourcing.EventApplier;
@@ -419,6 +421,60 @@ public final class ProcessEngine {
         return projection.replay(events);
     }
 
+    public ProcessInstance completeTimer(UUID processInstanceId, UUID tokenId, String nodeId) {
+        processInstanceLock.lock(processInstanceId);
+        try {
+            ProcessDefinition definition = getDefinitionForInstance(processInstanceId);
+            ProcessInstance instance = getProcessInstance(processInstanceId);
+
+            Token token = instance.getTokens().stream()
+                    .filter(t -> t.getId().equals(tokenId))
+                    .filter(t -> t.getState() == TokenState.WAITING)
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException(
+                            "No waiting token found with id: " + tokenId));
+
+            List<ProcessEvent> allEvents = new ArrayList<>();
+
+            TimerFiredEvent firedEvent = new TimerFiredEvent(
+                    UUIDv7.generate(),
+                    processInstanceId,
+                    tokenId,
+                    nodeId,
+                    Instant.now(),
+                    sequenceGenerator.next(processInstanceId)
+            );
+            allEvents.add(firedEvent);
+            instance = eventApplier.apply(firedEvent, instance);
+
+            FlowNode currentNode = findNodeById(definition, nodeId);
+            List<SequenceFlow> outgoingFlows = definition.getSequenceFlows().stream()
+                    .filter(f -> f.sourceRef().equals(nodeId))
+                    .toList();
+
+            if (!outgoingFlows.isEmpty()) {
+                TokenMovedEvent movedEvent = new TokenMovedEvent(
+                        UUIDv7.generate(),
+                        processInstanceId,
+                        tokenId,
+                        nodeId,
+                        outgoingFlows.getFirst().targetRef(),
+                        Instant.now(),
+                        sequenceGenerator.next(processInstanceId)
+                );
+                allEvents.add(movedEvent);
+                instance = eventApplier.apply(movedEvent, instance);
+            }
+
+            instance = advanceActiveTokens(instance, definition, allEvents);
+
+            eventStore.appendAll(allEvents);
+            return instance;
+        } finally {
+            processInstanceLock.unlock(processInstanceId);
+        }
+    }
+
     public void sendMessage(UUID correlationId, Map<String, Object> payload) {
         completeTask(correlationId, payload);
     }
@@ -438,7 +494,8 @@ public final class ProcessEngine {
                     continue;
                 }
 
-                if (node.type() == NodeType.SERVICE_TASK || node.type() == NodeType.CALL_ACTIVITY) {
+                if (node.type() == NodeType.SERVICE_TASK || node.type() == NodeType.CALL_ACTIVITY
+                        || node.type() == NodeType.TIMER_INTERMEDIATE_CATCH) {
                     // Flush accumulated events before sending message to RabbitMQ.
                     // ServiceTaskHandler.send() triggers external workers that may respond
                     // before eventStore.appendAll() in the caller — causing "instance not found".
@@ -450,6 +507,8 @@ public final class ProcessEngine {
                             ? serviceTask.topic()
                             : node instanceof CallActivity callActivity
                             ? callActivity.calledElement()
+                            : node instanceof TimerIntermediateCatchEvent timerCatch
+                            ? "timer:" + timerCatch.timerDefinition().value()
                             : node.id();
                     activityLog.taskStarted(instance.getId(), node.id(), activityTopic, Instant.now());
                     ExecutionContext context = new ExecutionContext(instance, definition);
