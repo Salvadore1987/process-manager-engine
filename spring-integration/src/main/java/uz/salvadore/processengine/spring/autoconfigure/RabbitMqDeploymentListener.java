@@ -6,32 +6,25 @@ import uz.salvadore.processengine.core.domain.model.ProcessDefinition;
 import uz.salvadore.processengine.core.domain.model.ServiceTask;
 import uz.salvadore.processengine.core.port.outgoing.DeploymentListener;
 import uz.salvadore.processengine.core.port.outgoing.MessageTransport;
-import uz.salvadore.processengine.rabbitmq.RabbitMqTopologyInitializer;
 
-import java.io.IOException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 /**
- * Creates RabbitMQ queues and bindings for all ServiceTask topics
- * when a process definition is deployed, and subscribes to result queues
- * so that task completions and failures are automatically processed.
+ * Registers result callbacks for all ServiceTask topics when a process definition
+ * is deployed. Topology (shared queues) is created at startup, not here.
  */
 public class RabbitMqDeploymentListener implements DeploymentListener {
 
     private static final Logger log = LoggerFactory.getLogger(RabbitMqDeploymentListener.class);
 
-    private final RabbitMqTopologyInitializer topologyInitializer;
     private final MessageTransport messageTransport;
     private final Consumer<MessageTransport.MessageResult> resultCallback;
     private final Set<String> subscribedTopics = ConcurrentHashMap.newKeySet();
 
-    public RabbitMqDeploymentListener(RabbitMqTopologyInitializer topologyInitializer,
-                                      MessageTransport messageTransport,
+    public RabbitMqDeploymentListener(MessageTransport messageTransport,
                                       Consumer<MessageTransport.MessageResult> resultCallback) {
-        this.topologyInitializer = topologyInitializer;
         this.messageTransport = messageTransport;
         this.resultCallback = resultCallback;
     }
@@ -44,18 +37,9 @@ public class RabbitMqDeploymentListener implements DeploymentListener {
                 .map(ServiceTask::topic)
                 .distinct()
                 .forEach(topic -> {
-                    try {
-                        topologyInitializer.ensureTopicQueues(topic);
-                        log.info("Initialized RabbitMQ queues for topic '{}' (definition: {})",
-                                topic, definition.getKey());
-                    } catch (IOException | TimeoutException e) {
-                        throw new RuntimeException(
-                                "Failed to initialize RabbitMQ queues for topic: " + topic, e);
-                    }
-
                     if (subscribedTopics.add(topic)) {
                         messageTransport.subscribe(topic, resultCallback);
-                        log.info("Subscribed to result queue for topic '{}' (definition: {})",
+                        log.info("Registered result callback for topic '{}' (definition: {})",
                                 topic, definition.getKey());
                     }
                 });

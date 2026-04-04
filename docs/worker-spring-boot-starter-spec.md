@@ -4,10 +4,10 @@
 
 External services (workers) that implement BPMN ServiceTasks must manually:
 - Connect to RabbitMQ
-- Consume from `task.{topic}.execute` queue
-- Extract `correlationId` from AMQP properties / `x-correlation-id` header
+- Consume from shared `task.execute` queue
+- Extract topic from `x-task-topic` header, `correlationId` from AMQP properties / `x-correlation-id` header
 - Process the payload (all process variables as JSON)
-- Publish result to exchange `process-engine.tasks` with routing key `task.{topic}.result`
+- Publish result to exchange `process-engine.tasks` with routing key `task.result` and `x-task-topic` header
 - Follow error format convention (`__error`, `__errorCode`)
 
 The starter eliminates this boilerplate. Integration reduces to implementing one interface and annotating one method.
@@ -130,20 +130,21 @@ Optional exception class with `errorCode` and `message` fields. Can be used for 
 
 ### Receiving a task
 
-Worker consumes from queue `task.{topic}.execute`:
+Worker consumes from shared queue `task.execute`:
 
 - **Body:** JSON — all process variables
 - **correlationId:** from AMQP `correlationId` property or `x-correlation-id` header
+- **topic:** from `x-task-topic` header — determines which handler processes the task
 
 ### Sending a result
 
-Worker publishes to exchange `process-engine.tasks` with routing key `task.{topic}.result`:
+Worker publishes to exchange `process-engine.tasks` with routing key `task.result`:
 
 - **Body:** JSON — result from `complete()` or error payload from `error()`
 - **correlationId:** same UUID from the received task
 - **contentType:** `application/json`
 - **deliveryMode:** 2 (persistent)
-- **headers:** `x-correlation-id` with the same UUID
+- **headers:** `x-correlation-id` with the same UUID, `x-task-topic` with the same topic
 
 ### Success payload
 
@@ -180,11 +181,13 @@ Worker publishes to exchange `process-engine.tasks` with routing key `task.{topi
 
 1. **Startup** — `WorkerAutoConfiguration` creates RabbitMQ `ConnectionFactory`
 2. **Bean scanning** — `BeanPostProcessor` finds `ExternalTaskHandler` beans with `@JobWorker`, registers in `TaskHandlerRegistry`
-3. **Consumer startup** — `TaskListenerContainer` (SmartLifecycle) for each registered topic:
+3. **Consumer startup** — `TaskListenerContainer` (SmartLifecycle) creates a single consumer on shared `task.execute` queue:
    - Sets `basicQos(1)` to prevent message flooding and duplicate delivery on reconnect
-   - Passive declares queue `task.{topic}.execute` (does not conflict with engine's DLX arguments)
-   - Starts consumer
+   - Passive declares queue `task.execute`
+   - Starts single shared consumer
 4. **Message received:**
+   - Extract topic from `x-task-topic` header
+   - Look up handler from registry; if not found — throw `IllegalStateException` (message goes to DLQ)
    - Deserialize JSON payload
    - Create `TaskContext` with correlation ID, variables, and response sender
    - If `@JobWorker(retry = true)`: wrap execution in retry loop (up to `retryCount` attempts with `retryBackoff` ms delay between attempts)

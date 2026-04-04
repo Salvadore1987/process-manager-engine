@@ -17,11 +17,13 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
  * RabbitMQ implementation of MessageTransport.
- * Sends task execution messages and subscribes to result queues.
+ * Sends task execution messages to a shared execute queue and subscribes
+ * to a shared result queue, dispatching by the x-task-topic header.
  */
 public final class RabbitMqMessageTransport implements MessageTransport {
 
@@ -29,17 +31,16 @@ public final class RabbitMqMessageTransport implements MessageTransport {
 
     private final RabbitMqConnectionManager connectionManager;
     private final RabbitMqTransportConfig config;
-    private final RabbitMqTopologyInitializer topologyInitializer;
     private final CorrelationIdResolver correlationIdResolver;
     private final ObjectMapper objectMapper;
-    private final ConcurrentHashMap<String, Channel> consumerChannels = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Consumer<MessageResult>> topicCallbacks = new ConcurrentHashMap<>();
+    private final AtomicBoolean consumerStarted = new AtomicBoolean(false);
+    private volatile Channel resultChannel;
 
     public RabbitMqMessageTransport(RabbitMqConnectionManager connectionManager,
-                                    RabbitMqTransportConfig config,
-                                    RabbitMqTopologyInitializer topologyInitializer) {
+                                    RabbitMqTransportConfig config) {
         this.connectionManager = connectionManager;
         this.config = config;
-        this.topologyInitializer = topologyInitializer;
         this.correlationIdResolver = new CorrelationIdResolver();
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule(new JavaTimeModule());
@@ -48,14 +49,11 @@ public final class RabbitMqMessageTransport implements MessageTransport {
     @Override
     public void send(String topic, UUID correlationId, Map<String, Object> payload) {
         try {
-            topologyInitializer.ensureTopicQueues(topic);
-
-            String routingKey = "task." + topic + ".execute";
             byte[] body = objectMapper.writeValueAsBytes(payload);
-            AMQP.BasicProperties properties = correlationIdResolver.createProperties(correlationId);
+            AMQP.BasicProperties properties = correlationIdResolver.createProperties(correlationId, topic);
 
             try (Channel channel = connectionManager.createChannel()) {
-                channel.basicPublish(config.getTasksExchange(), routingKey, properties, body);
+                channel.basicPublish(config.getTasksExchange(), RabbitMqTopologyInitializer.EXECUTE_QUEUE, properties, body);
                 log.debug("Sent message to topic '{}' with correlationId={}", topic, correlationId);
             }
         } catch (IOException | TimeoutException e) {
@@ -64,28 +62,34 @@ public final class RabbitMqMessageTransport implements MessageTransport {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void subscribe(String topic, Consumer<MessageResult> callback) {
-        if (consumerChannels.containsKey(topic)) {
-            log.debug("Already subscribed to topic '{}', skipping", topic);
-            return;
+        topicCallbacks.put(topic, callback);
+        log.info("Registered callback for topic '{}'", topic);
+
+        if (consumerStarted.compareAndSet(false, true)) {
+            startResultConsumer();
         }
+    }
 
+    @SuppressWarnings("unchecked")
+    private void startResultConsumer() {
         try {
-            topologyInitializer.ensureTopicQueues(topic);
+            resultChannel = connectionManager.createChannel();
+            resultChannel.basicQos(1);
 
-            String resultQueue = "task." + topic + ".result";
-            Channel channel = connectionManager.createChannel();
-            channel.basicQos(1);
-            consumerChannels.put(topic, channel);
-
-            channel.basicConsume(resultQueue, false, new DefaultConsumer(channel) {
+            resultChannel.basicConsume(RabbitMqTopologyInitializer.RESULT_QUEUE, false, new DefaultConsumer(resultChannel) {
                 @Override
                 public void handleDelivery(String consumerTag, Envelope envelope,
                                            AMQP.BasicProperties properties, byte[] body) throws IOException {
                     try {
+                        String topic = correlationIdResolver.extractTopic(properties);
                         UUID correlationId = correlationIdResolver.extract(properties);
                         Map<String, Object> payload = objectMapper.readValue(body, Map.class);
+
+                        Consumer<MessageResult> topicCallback = topicCallbacks.get(topic);
+                        if (topicCallback == null) {
+                            throw new IllegalStateException("No callback registered for topic: " + topic);
+                        }
 
                         boolean success = true;
                         String errorCode = null;
@@ -95,33 +99,29 @@ public final class RabbitMqMessageTransport implements MessageTransport {
                         }
 
                         MessageResult result = new MessageResult(correlationId, payload, success, errorCode);
-                        callback.accept(result);
-                        channel.basicAck(envelope.getDeliveryTag(), false);
+                        topicCallback.accept(result);
+                        resultChannel.basicAck(envelope.getDeliveryTag(), false);
                         log.debug("Processed result for topic '{}', correlationId={}", topic, correlationId);
                     } catch (Exception e) {
-                        log.error("Error processing result message for topic '{}'", topic, e);
-                        channel.basicNack(envelope.getDeliveryTag(), false, false);
+                        log.error("Error processing result message", e);
+                        resultChannel.basicNack(envelope.getDeliveryTag(), false, false);
                     }
                 }
             });
 
-            log.info("Subscribed to result queue: {}", resultQueue);
+            log.info("Started shared result consumer on queue: {}", RabbitMqTopologyInitializer.RESULT_QUEUE);
         } catch (IOException | TimeoutException e) {
-            throw new RuntimeException("Failed to subscribe to topic: " + topic, e);
+            throw new RuntimeException("Failed to start result consumer", e);
         }
     }
 
     public void close() {
-        for (Map.Entry<String, Channel> entry : consumerChannels.entrySet()) {
-            Channel channel = entry.getValue();
-            if (channel.isOpen()) {
-                try {
-                    channel.close();
-                } catch (IOException | TimeoutException e) {
-                    log.warn("Error closing consumer channel for topic '{}'", entry.getKey(), e);
-                }
+        if (resultChannel != null && resultChannel.isOpen()) {
+            try {
+                resultChannel.close();
+            } catch (IOException | TimeoutException e) {
+                log.warn("Error closing result consumer channel", e);
             }
         }
-        consumerChannels.clear();
     }
 }

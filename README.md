@@ -558,19 +558,22 @@ python3 docs/validate_process.py <bpmn_file> <process_instance_id>
 
 ```
 Exchange: process-engine.tasks (topic, durable)
-  Queues per topic:
-    task.{topic}.execute   — задачи для внешних сервисов
-    task.{topic}.result    — результаты от внешних сервисов
+  Shared queues:
+    task.execute   — задачи для внешних сервисов (routing по x-task-topic header)
+    task.result    — результаты от внешних сервисов (routing по x-task-topic header)
 
 Exchange: process-engine.retry (topic, durable)
-  Queues per topic:
-    task.{topic}.retry     — retry с exponential backoff (DLX → tasks exchange)
+  Shared queue:
+    task.retry     — retry с exponential backoff (DLX → tasks exchange → task.execute)
 
 Exchange: process-engine.dlq (fanout, durable)
   Queue: process-engine.dlq — сообщения, исчерпавшие retry
 
 Exchange: process-engine.timers (topic, durable)
   Queue: process-engine.timers.fired — сработавшие таймеры
+
+Маршрутизация задач к конкретным воркерам осуществляется через AMQP-заголовок
+x-task-topic, а не через отдельные очереди для каждого topic.
 ```
 
 ## Сборка и тестирование

@@ -8,22 +8,23 @@ import uz.salvadore.processengine.rabbitmq.config.RabbitMqTransportConfig;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Declares RabbitMQ exchanges and queues for the process engine topology.
- * Exchanges: tasks (topic), retry (topic), dlq (fanout), timers (headers with x-delayed-message plugin or topic fallback).
- * Per-topic queues are declared lazily on first use.
+ * Declares RabbitMQ exchanges and shared queues for the process engine topology.
+ * Exchanges: tasks (topic), retry (topic), dlq (fanout), timers (topic).
+ * Shared queues: task.execute, task.result, task.retry — created once at startup.
  */
 public final class RabbitMqTopologyInitializer {
 
     private static final Logger log = LoggerFactory.getLogger(RabbitMqTopologyInitializer.class);
 
+    public static final String EXECUTE_QUEUE = "task.execute";
+    public static final String RESULT_QUEUE = "task.result";
+    public static final String RETRY_QUEUE = "task.retry";
+
     private final RabbitMqConnectionManager connectionManager;
     private final RabbitMqTransportConfig config;
-    private final Set<String> declaredTopics = ConcurrentHashMap.newKeySet();
 
     public RabbitMqTopologyInitializer(RabbitMqConnectionManager connectionManager,
                                        RabbitMqTransportConfig config) {
@@ -32,7 +33,7 @@ public final class RabbitMqTopologyInitializer {
     }
 
     /**
-     * Declares the core exchanges and the DLQ queue. Call once at startup.
+     * Declares the core exchanges, the DLQ queue, and the shared task queues. Call once at startup.
      */
     public void initializeTopology() throws IOException, TimeoutException {
         try (Channel channel = connectionManager.createChannel()) {
@@ -52,43 +53,26 @@ public final class RabbitMqTopologyInitializer {
             channel.queueDeclare(dlqQueue, true, false, false, null);
             channel.queueBind(dlqQueue, config.getDlqExchange(), "");
             log.info("Declared and bound DLQ queue: {}", dlqQueue);
-        }
-    }
 
-    /**
-     * Lazily declares per-topic queues: task.{topic}.execute and task.{topic}.result.
-     * Also declares retry queue with TTL dead-lettering back to tasks exchange.
-     */
-    public void ensureTopicQueues(String topic) throws IOException, TimeoutException {
-        if (declaredTopics.contains(topic)) {
-            return;
-        }
-
-        try (Channel channel = connectionManager.createChannel()) {
-            String executeQueue = "task." + topic + ".execute";
-            String resultQueue = "task." + topic + ".result";
-            String retryQueue = "task." + topic + ".retry";
-
-            channel.queueDeclare(executeQueue, true, false, false, Map.of(
+            // Shared execute queue
+            channel.queueDeclare(EXECUTE_QUEUE, true, false, false, Map.of(
                     "x-dead-letter-exchange", config.getDlqExchange()
             ));
-            channel.queueBind(executeQueue, config.getTasksExchange(), "task." + topic + ".execute");
+            channel.queueBind(EXECUTE_QUEUE, config.getTasksExchange(), EXECUTE_QUEUE);
+            log.info("Declared and bound shared execute queue: {}", EXECUTE_QUEUE);
 
-            channel.queueDeclare(resultQueue, true, false, false, null);
-            channel.queueBind(resultQueue, config.getTasksExchange(), "task." + topic + ".result");
+            // Shared result queue
+            channel.queueDeclare(RESULT_QUEUE, true, false, false, null);
+            channel.queueBind(RESULT_QUEUE, config.getTasksExchange(), RESULT_QUEUE);
+            log.info("Declared and bound shared result queue: {}", RESULT_QUEUE);
 
-            channel.queueDeclare(retryQueue, true, false, false, Map.of(
+            // Shared retry queue — dead-letters back to execute queue via tasks exchange
+            channel.queueDeclare(RETRY_QUEUE, true, false, false, Map.of(
                     "x-dead-letter-exchange", config.getTasksExchange(),
-                    "x-dead-letter-routing-key", "task." + topic + ".execute"
+                    "x-dead-letter-routing-key", EXECUTE_QUEUE
             ));
-            channel.queueBind(retryQueue, config.getRetryExchange(), "task." + topic + ".retry");
-
-            declaredTopics.add(topic);
-            log.info("Declared queues for topic '{}': {}, {}, {}", topic, executeQueue, resultQueue, retryQueue);
+            channel.queueBind(RETRY_QUEUE, config.getRetryExchange(), RETRY_QUEUE);
+            log.info("Declared and bound shared retry queue: {}", RETRY_QUEUE);
         }
-    }
-
-    public Set<String> getDeclaredTopics() {
-        return Set.copyOf(declaredTopics);
     }
 }

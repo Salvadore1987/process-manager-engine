@@ -35,8 +35,6 @@ import uz.salvadore.processengine.core.port.outgoing.ProcessEventStore;
 import uz.salvadore.processengine.core.port.outgoing.ProcessInstanceLock;
 import uz.salvadore.processengine.core.port.outgoing.SequenceGenerator;
 import uz.salvadore.processengine.core.port.outgoing.TimerService;
-import uz.salvadore.processengine.rabbitmq.RabbitMqTopologyInitializer;
-
 import java.util.List;
 import java.util.Map;
 
@@ -116,13 +114,11 @@ public class ProcessEngineAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(name = "rabbitMqDeploymentListener")
-    @ConditionalOnBean(RabbitMqTopologyInitializer.class)
+    @ConditionalOnBean(MessageTransport.class)
     public DeploymentListener rabbitMqDeploymentListener(
-            RabbitMqTopologyInitializer topologyInitializer,
             MessageTransport messageTransport,
             ObjectProvider<ProcessEngine> processEngineProvider) {
         return new RabbitMqDeploymentListener(
-                topologyInitializer,
                 messageTransport,
                 taskResultCallback(processEngineProvider)
         );
@@ -130,15 +126,13 @@ public class ProcessEngineAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(name = "rabbitMqSubscriptionRecovery")
-    @ConditionalOnBean(RabbitMqTopologyInitializer.class)
+    @ConditionalOnBean(MessageTransport.class)
     public RabbitMqSubscriptionRecovery rabbitMqSubscriptionRecovery(
             ProcessDefinitionStore definitionStore,
-            RabbitMqTopologyInitializer topologyInitializer,
             MessageTransport messageTransport,
             ObjectProvider<ProcessEngine> processEngineProvider) {
         return new RabbitMqSubscriptionRecovery(
                 definitionStore,
-                topologyInitializer,
                 messageTransport,
                 taskResultCallback(processEngineProvider)
         );

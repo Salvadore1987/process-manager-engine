@@ -126,18 +126,18 @@ Standalone движок, не зависит от Spring и RabbitMQ.
 **Топология RabbitMQ:**
 ```
 Exchange: process-engine.tasks (topic)
-  Routing keys:
-    task.{topic}.execute  → очередь для внешнего сервиса
-    task.{topic}.result   → очередь для результатов
+  Shared queues (маршрутизация по x-task-topic header):
+    task.execute  → общая очередь задач для воркеров
+    task.result   → общая очередь результатов от воркеров
 
-Exchange: process-engine.retry (topic, delayed)
-  Routing keys:
-    retry.{topic}            → retry с TTL/backoff
+Exchange: process-engine.retry (topic)
+  Queue:
+    task.retry    → retry с TTL/backoff (DLX → task.execute)
 
-Exchange: process-engine.dlq (direct)
-  Queue: process-engine.dead-letters
+Exchange: process-engine.dlq (fanout)
+  Queue: process-engine.dlq
 
-Exchange: process-engine.timers (x-delayed-message)
+Exchange: process-engine.timers (topic)
   Routing keys:
     timer.{processInstanceId}
 ```
@@ -336,8 +336,8 @@ FlowNode *──* SequenceFlow (incoming/outgoing)
 
 ### Retry Strategy (DLQ + Requeue with Backoff)
 
-1. ServiceTask отправляет сообщение в `task.{taskType}.execute`
-2. Внешний сервис обрабатывает и отвечает в `task.{taskType}.result`
+1. ServiceTask отправляет сообщение в общую очередь `task.execute` с заголовком `x-task-topic`
+2. Воркер определяет topic по заголовку, обрабатывает и отвечает в `task.result` с тем же `x-task-topic`
 3. При ошибке (exception/timeout):
    - Сообщение отправляется в `retry.{taskType}` с TTL = baseInterval × 2^attempt
    - Header `x-retry-count` инкрементируется
