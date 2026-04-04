@@ -25,15 +25,19 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * A {@link SmartLifecycle} component that creates RabbitMQ consumers for each
- * registered task topic and dispatches incoming messages to the corresponding handler.
+ * A {@link SmartLifecycle} component that creates a single RabbitMQ consumer
+ * on the shared execute queue and dispatches incoming messages to the
+ * corresponding handler based on the x-task-topic header.
  */
 public class TaskListenerContainer implements SmartLifecycle {
 
     private static final Logger log = LoggerFactory.getLogger(TaskListenerContainer.class);
 
     private static final String EXCHANGE_NAME = "process-engine.tasks";
+    private static final String EXECUTE_QUEUE = "task.execute";
+    private static final String RESULT_QUEUE = "task.result";
     private static final String CORRELATION_ID_HEADER = "x-correlation-id";
+    private static final String TOPIC_HEADER = "x-task-topic";
 
     private final ConnectionFactory connectionFactory;
     private final TaskHandlerRegistry registry;
@@ -61,33 +65,24 @@ public class TaskListenerContainer implements SmartLifecycle {
                 channel = connection.createChannel();
                 channel.basicQos(1);
 
-                Set<String> topics = registry.getTopics();
-                if (topics.isEmpty()) {
-                    log.warn("No @TaskHandler methods found; no consumers will be started");
-                    return;
-                }
+                channel.queueDeclarePassive(EXECUTE_QUEUE);
 
-                for (String topic : topics) {
-                    String queueName = "task." + topic + ".execute";
-                    channel.queueDeclarePassive(queueName);
+                DeliverCallback deliverCallback = (consumerTag, delivery) -> {
+                    long deliveryTag = delivery.getEnvelope().getDeliveryTag();
+                    try {
+                        String topic = extractTopic(delivery.getProperties());
+                        handleDelivery(topic, delivery.getProperties(), delivery.getBody());
+                        channel.basicAck(deliveryTag, false);
+                    } catch (Exception ex) {
+                        log.error("Error processing message: {}", ex.getMessage(), ex);
+                        channel.basicNack(deliveryTag, false, false);
+                    }
+                };
 
-                    DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-                        long deliveryTag = delivery.getEnvelope().getDeliveryTag();
-                        try {
-                            handleDelivery(topic, delivery.getProperties(), delivery.getBody());
-                            channel.basicAck(deliveryTag, false);
-                        } catch (Exception ex) {
-                            log.error("Unexpected error processing message for topic '{}': {}",
-                                    topic, ex.getMessage(), ex);
-                            channel.basicNack(deliveryTag, false, false);
-                        }
-                    };
-
-                    String consumerTag = channel.basicConsume(queueName, false, deliverCallback,
-                            cancelCallback -> log.warn("Consumer for topic '{}' was cancelled", topic));
-                    consumerTags.add(consumerTag);
-                    log.info("Started consumer for topic '{}' on queue '{}'", topic, queueName);
-                }
+                String consumerTag = channel.basicConsume(EXECUTE_QUEUE, false, deliverCallback,
+                        cancelCallback -> log.warn("Shared task consumer was cancelled"));
+                consumerTags.add(consumerTag);
+                log.info("Started shared consumer on queue '{}'", EXECUTE_QUEUE);
             } catch (IOException | TimeoutException ex) {
                 running.set(false);
                 throw new IllegalStateException("Failed to start task listener container", ex);
@@ -137,13 +132,20 @@ public class TaskListenerContainer implements SmartLifecycle {
         return consumerTags.size();
     }
 
+    private String extractTopic(AMQP.BasicProperties properties) {
+        Map<String, Object> headers = properties.getHeaders();
+        if (headers != null && headers.containsKey(TOPIC_HEADER)) {
+            return headers.get(TOPIC_HEADER).toString();
+        }
+        throw new IllegalStateException("No x-task-topic header found in message");
+    }
+
     private void handleDelivery(String topic, AMQP.BasicProperties properties, byte[] body)
             throws Exception {
 
         ExternalTaskHandler handler = registry.getHandler(topic);
         if (handler == null) {
-            log.error("No handler registered for topic '{}'", topic);
-            return;
+            throw new IllegalStateException("No handler registered for topic: " + topic);
         }
 
         Map<String, Object> messageBody = objectMapper.readValue(body,
@@ -207,10 +209,9 @@ public class TaskListenerContainer implements SmartLifecycle {
         @Override
         public void sendSuccess(String correlationId, Map<String, Object> result) {
             try {
-                String routingKey = "task." + topic + ".result";
                 byte[] responseBody = objectMapper.writeValueAsBytes(result);
-                AMQP.BasicProperties responseProperties = buildResponseProperties(correlationId);
-                channel.basicPublish(EXCHANGE_NAME, routingKey, responseProperties, responseBody);
+                AMQP.BasicProperties responseProperties = buildResponseProperties(correlationId, topic);
+                channel.basicPublish(EXCHANGE_NAME, RESULT_QUEUE, responseProperties, responseBody);
                 log.debug("Published success response for topic '{}', correlationId={}", topic, correlationId);
             } catch (IOException ex) {
                 throw new RuntimeException("Failed to publish success response for topic: " + topic, ex);
@@ -220,16 +221,14 @@ public class TaskListenerContainer implements SmartLifecycle {
         @Override
         public void sendError(String correlationId, String errorCode, String errorMessage) {
             try {
-                String routingKey = "task." + topic + ".result";
-
                 Map<String, Object> errorPayload = new HashMap<>();
                 errorPayload.put("__error", true);
                 errorPayload.put("__errorCode", errorCode);
                 errorPayload.put("message", errorMessage);
 
                 byte[] responseBody = objectMapper.writeValueAsBytes(errorPayload);
-                AMQP.BasicProperties responseProperties = buildResponseProperties(correlationId);
-                channel.basicPublish(EXCHANGE_NAME, routingKey, responseProperties, responseBody);
+                AMQP.BasicProperties responseProperties = buildResponseProperties(correlationId, topic);
+                channel.basicPublish(EXCHANGE_NAME, RESULT_QUEUE, responseProperties, responseBody);
                 log.debug("Published error response for topic '{}', correlationId={}", topic, correlationId);
             } catch (IOException ex) {
                 throw new RuntimeException("Failed to publish error response for topic: " + topic, ex);
@@ -237,9 +236,10 @@ public class TaskListenerContainer implements SmartLifecycle {
         }
     }
 
-    private AMQP.BasicProperties buildResponseProperties(String correlationId) {
+    private AMQP.BasicProperties buildResponseProperties(String correlationId, String topic) {
         Map<String, Object> headers = new HashMap<>();
         headers.put(CORRELATION_ID_HEADER, correlationId);
+        headers.put(TOPIC_HEADER, topic);
 
         return new AMQP.BasicProperties.Builder()
                 .correlationId(correlationId)

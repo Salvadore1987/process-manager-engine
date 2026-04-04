@@ -158,7 +158,7 @@ uz.salvadore.processengine.rabbitmq
 
 **Ключевые решения:**
 - Один `Connection` (thread-safe), channels pooled (не thread-safe)
-- Topology: 4 exchanges (tasks, retry, dlq, timers) + per-topic queues lazily
+- Topology: 4 exchanges (tasks, retry, dlq, timers) + shared queues (task.execute, task.result, task.retry) with x-task-topic header routing
 - Retry: exponential backoff через TTL + dead-letter routing или x-delayed-message
 - Timer: `x-delay` header на timers exchange
 - Virtual threads: `Executors.newVirtualThreadPerTaskExecutor()` для consumer handlers

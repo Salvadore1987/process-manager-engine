@@ -18,8 +18,8 @@
                             │                         │
                ┌────────────▼──────────┐   ┌─────────▼──────────────┐
                │     RabbitMQ          │   │  REST: POST /messages  │
-               │  task.{topic}.execute │   │  (ручная корреляция)   │
-               │  task.{topic}.result  │   └────────────────────────┘
+               │  task.execute         │   │  (ручная корреляция)   │
+               │  task.result          │   └────────────────────────┘
                └────────────┬──────────┘
                             │
           ┌─────────────────┼─────────────────┐
@@ -42,10 +42,10 @@
 
 Каждый `ServiceTask` в BPMN-модели имеет атрибут `topic` — имя очереди задач. Когда токен процесса достигает ServiceTask:
 
-1. Движок публикует сообщение в очередь `task.{topic}.execute`
+1. Движок публикует сообщение в общую очередь `task.execute` с заголовком `x-task-topic`
 2. Токен переходит в состояние `WAITING`
-3. Внешний сервис читает сообщение, выполняет бизнес-логику
-4. Сервис отправляет результат в очередь `task.{topic}.result`
+3. Воркер читает сообщение, определяет topic по заголовку `x-task-topic` и выполняет бизнес-логику
+4. Воркер отправляет результат в общую очередь `task.result` с заголовком `x-task-topic`
 5. Движок получает результат:
    - **Успех** (`context.complete()`) — мержит переменные и продвигает токен дальше
    - **Ошибка** (`context.error()`) — ищет `ErrorBoundaryEvent` на задаче; если найден — маршрутизирует токен по error flow; если нет — запускает компенсацию завершённых задач и переводит процесс в `ERROR`
@@ -68,13 +68,13 @@ Engine                          RabbitMQ                        Your Service
 
 ```
 Exchange: process-engine.tasks (topic, durable)
-  └─ Для каждого topic:
-      task.{topic}.execute   — задачи ОТ движка К сервису
-      task.{topic}.result    — результаты ОТ сервиса К движку
+  └─ Общие очереди (маршрутизация по заголовку x-task-topic):
+      task.execute   — задачи ОТ движка К воркерам
+      task.result    — результаты ОТ воркеров К движку
 
 Exchange: process-engine.retry (topic, durable)
-  └─ task.{topic}.retry    — retry с exponential backoff
-      (DLX → process-engine.tasks → task.{topic}.execute)
+  └─ task.retry    — retry с exponential backoff
+      (DLX → process-engine.tasks → task.execute)
 
 Exchange: process-engine.dlq (fanout, durable)
   └─ process-engine.dlq   — сообщения после исчерпания retry
@@ -85,7 +85,7 @@ Exchange: process-engine.timers (topic, durable)
 
 ### Формат сообщений
 
-**Сообщение в execute-очереди (от движка к сервису):**
+**Сообщение в execute-очереди (от движка к воркеру):**
 
 ```
 AMQP Properties:
@@ -94,6 +94,7 @@ AMQP Properties:
   correlationId: "{token-uuid}"
   headers:
     x-correlation-id: "{token-uuid}"
+    x-task-topic:     "{topic}"
 
 Body (JSON — все переменные процесса):
 {
@@ -102,7 +103,7 @@ Body (JSON — все переменные процесса):
 }
 ```
 
-**Ответ в result-очереди (от сервиса к движку):**
+**Ответ в result-очереди (от воркера к движку):**
 
 ```
 AMQP Properties:
@@ -111,6 +112,7 @@ AMQP Properties:
   correlationId: "{тот же token-uuid}"
   headers:
     x-correlation-id: "{тот же token-uuid}"
+    x-task-topic:     "{тот же topic}"
 
 Body — успешный результат:
 {
@@ -126,7 +128,7 @@ Body — ошибка:
 }
 ```
 
-> **Важно:** `correlationId` из входящего сообщения необходимо передать обратно без изменений. Это UUID токена, по которому движок определяет, какой процесс продвинуть.
+> **Важно:** `correlationId` и заголовок `x-task-topic` из входящего сообщения необходимо передать обратно без изменений. `correlationId` — UUID токена, по которому движок определяет, какой процесс продвинуть. `x-task-topic` — определяет, какому callback передать результат.
 
 ---
 
@@ -181,11 +183,12 @@ public class OrderValidationHandler implements ExternalTaskHandler {
 
 Starter автоматически:
 - Подключается к RabbitMQ с `basicQos(1)` для защиты от дублирования сообщений
-- Слушает очередь `task.order.validate.execute`
-- Извлекает `correlationId` и переменные процесса
-- Передаёт их в `TaskContext`
-- При вызове `context.complete()` — публикует результат в `task.order.validate.result`, движок вызывает `completeTask()` и продвигает токен дальше
+- Слушает общую очередь `task.execute`
+- Определяет topic задачи по заголовку `x-task-topic` и направляет к нужному handler
+- Извлекает `correlationId` и переменные процесса, передаёт их в `TaskContext`
+- При вызове `context.complete()` — публикует результат в `task.result` с заголовком `x-task-topic`, движок вызывает `completeTask()` и продвигает токен дальше
 - При вызове `context.error()` — публикует ошибку с `__error` и `__errorCode`, движок вызывает `failTask()` и маршрутизирует через `ErrorBoundaryEvent` или запускает компенсацию
+- Если воркер получает сообщение с topic без зарегистрированного handler — выбрасывается `IllegalStateException`, сообщение уходит в DLQ
 
 **Retry на стороне воркера** (по умолчанию выключен):
 
@@ -216,9 +219,17 @@ public class OrderValidationWorker {
         this.objectMapper = objectMapper;
     }
 
-    @RabbitListener(queues = "task.order.validate.execute")
+    @RabbitListener(queues = "task.execute")
     public void handleTask(Message message) {
         String correlationId = message.getMessageProperties().getCorrelationId();
+        String topic = (String) message.getMessageProperties()
+                .getHeader("x-task-topic");
+
+        // Фильтрация: обрабатываем только нужный topic
+        if (!"order.validate".equals(topic)) {
+            // Не наш topic — nack без requeue (уйдёт в DLQ)
+            throw new AmqpRejectAndDontRequeueException("Unknown topic: " + topic);
+        }
 
         Map<String, Object> variables = objectMapper.readValue(
                 message.getBody(), new TypeReference<>() {});
@@ -239,12 +250,14 @@ public class OrderValidationWorker {
 
         rabbitTemplate.convertAndSend(
                 "process-engine.tasks",
-                "task.order.validate.result",
+                "task.result",
                 result,
                 msg -> {
                     msg.getMessageProperties().setCorrelationId(correlationId);
                     msg.getMessageProperties()
                        .setHeader("x-correlation-id", correlationId);
+                    msg.getMessageProperties()
+                       .setHeader("x-task-topic", topic);
                     return msg;
                 }
         );
@@ -257,9 +270,18 @@ public class OrderValidationWorker {
 ```java
 Channel channel = connection.createChannel();
 
-channel.basicConsume("task.order.validate.execute", false,
+channel.basicConsume("task.execute", false,
         (consumerTag, delivery) -> {
             String correlationId = delivery.getProperties().getCorrelationId();
+            String topic = delivery.getProperties().getHeaders()
+                    .get("x-task-topic").toString();
+
+            // Фильтрация по topic
+            if (!"order.validate".equals(topic)) {
+                channel.basicNack(delivery.getEnvelope().getDeliveryTag(), false, false);
+                return;
+            }
+
             Map<String, Object> variables = objectMapper.readValue(
                     delivery.getBody(), new TypeReference<>() {});
 
@@ -270,12 +292,14 @@ channel.basicConsume("task.order.validate.execute", false,
                     .correlationId(correlationId)
                     .contentType("application/json")
                     .deliveryMode(2)
-                    .headers(Map.of("x-correlation-id", correlationId))
+                    .headers(Map.of(
+                            "x-correlation-id", correlationId,
+                            "x-task-topic", topic))
                     .build();
 
             channel.basicPublish(
                     "process-engine.tasks",
-                    "task.order.validate.result",
+                    "task.result",
                     props,
                     objectMapper.writeValueAsBytes(result));
 
@@ -295,6 +319,13 @@ connection = pika.BlockingConnection(
 channel = connection.channel()
 
 def on_message(ch, method, properties, body):
+    topic = properties.headers.get('x-task-topic')
+
+    # Фильтрация по topic
+    if topic != 'order.validate':
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+        return
+
     variables = json.loads(body)
     correlation_id = properties.correlation_id
 
@@ -303,19 +334,22 @@ def on_message(ch, method, properties, body):
 
     ch.basic_publish(
         exchange='process-engine.tasks',
-        routing_key='task.order.validate.result',
+        routing_key='task.result',
         properties=pika.BasicProperties(
             correlation_id=correlation_id,
             content_type='application/json',
             delivery_mode=2,
-            headers={'x-correlation-id': correlation_id}
+            headers={
+                'x-correlation-id': correlation_id,
+                'x-task-topic': topic
+            }
         ),
         body=json.dumps(result)
     )
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
 channel.basic_consume(
-    queue='task.order.validate.execute',
+    queue='task.execute',
     on_message_callback=on_message)
 channel.start_consuming()
 ```
@@ -588,16 +622,18 @@ EndEvent
 
 ### Какие сервисы нужно реализовать
 
-| Topic | Очередь | Что делает сервис |
-|-------|---------|-------------------|
-| `order.validate` | `task.order.validate.execute` | Проверяет данные заказа |
-| `order.fraud-check` | `task.order.fraud-check.execute` | Антифрод-проверка |
-| `warehouse.reserve` | `task.warehouse.reserve.execute` | Резервирует товар на складе |
-| `payment.charge` | `task.payment.charge.execute` | Списание средств |
-| `payment.confirm` | `task.payment.confirm.execute` | Подтверждение платежа |
-| `payment.refund` | `task.payment.refund.execute` | Возврат средств (компенсация) |
-| `shipping.arrange` | `task.shipping.arrange.execute` | Организация доставки |
-| `notification.order-confirmed` | `task.notification.order-confirmed.execute` | Отправка уведомления |
+| Topic (x-task-topic) | Очередь | Что делает сервис |
+|----------------------|---------|-------------------|
+| `order.validate` | `task.execute` | Проверяет данные заказа |
+| `order.fraud-check` | `task.execute` | Антифрод-проверка |
+| `warehouse.reserve` | `task.execute` | Резервирует товар на складе |
+| `payment.charge` | `task.execute` | Списание средств |
+| `payment.confirm` | `task.execute` | Подтверждение платежа |
+| `payment.refund` | `task.execute` | Возврат средств (компенсация) |
+| `shipping.arrange` | `task.execute` | Организация доставки |
+| `notification.order-confirmed` | `task.execute` | Отправка уведомления |
+
+Все задачи идут через общую очередь `task.execute`. Воркеры определяют свой topic по заголовку `x-task-topic` в AMQP-сообщении.
 
 Каждый сервис реализует `ExternalTaskHandler` с аннотацией `@JobWorker(topic = "...")`:
 1. Получает переменные процесса через `TaskContext`
@@ -652,7 +688,8 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/instances
 ## Чеклист интеграции
 
 1. **Задеплоить BPMN-определение** через `POST /api/v1/definitions`
-   - При деплое движок автоматически создаёт RabbitMQ очереди и bindings для всех ServiceTask топиков
+   - Общие RabbitMQ очереди (`task.execute`, `task.result`, `task.retry`) создаются при запуске движка
+   - При деплое движок регистрирует result-callbacks для всех ServiceTask топиков
 2. **Реализовать worker-сервисы** для каждого `topic` из BPMN:
    - Подключить `worker-spring-boot-starter` как зависимость
    - Реализовать `ExternalTaskHandler` с `@JobWorker(topic = "...")`

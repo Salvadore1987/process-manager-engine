@@ -15,6 +15,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import uz.salvadore.processengine.core.port.outgoing.MessageTransport;
 import uz.salvadore.processengine.rabbitmq.config.RabbitMqTransportConfig;
+import uz.salvadore.processengine.rabbitmq.correlation.CorrelationIdResolver;
 
 import java.util.Map;
 import java.util.UUID;
@@ -50,7 +51,7 @@ class RabbitMqMessageTransportTest {
         connectionManager = new RabbitMqConnectionManager(config);
         topologyInitializer = new RabbitMqTopologyInitializer(connectionManager, config);
         topologyInitializer.initializeTopology();
-        messageTransport = new RabbitMqMessageTransport(connectionManager, config, topologyInitializer);
+        messageTransport = new RabbitMqMessageTransport(connectionManager, config);
     }
 
     @AfterEach
@@ -64,8 +65,8 @@ class RabbitMqMessageTransportTest {
     class Send {
 
         @Test
-        @DisplayName("sends message to execute queue with correct correlationId and payload")
-        void sendsMessageToExecuteQueue() throws Exception {
+        @DisplayName("sends message to shared execute queue with correct correlationId, payload, and topic header")
+        void sendsMessageToSharedExecuteQueue() throws Exception {
             // Arrange
             String topic = "send-email";
             UUID correlationId = UUID.randomUUID();
@@ -74,12 +75,14 @@ class RabbitMqMessageTransportTest {
             // Act
             messageTransport.send(topic, correlationId, payload);
 
-            // Assert — consume directly from the execute queue
+            // Assert — consume directly from the shared execute queue
             try (Channel channel = connectionManager.createChannel()) {
-                GetResponse response = channel.basicGet("task.send-email.execute", true);
+                GetResponse response = channel.basicGet(RabbitMqTopologyInitializer.EXECUTE_QUEUE, true);
 
                 assertThat(response).isNotNull();
                 assertThat(response.getProps().getCorrelationId()).isEqualTo(correlationId.toString());
+                assertThat(response.getProps().getHeaders().get(CorrelationIdResolver.HEADER_TASK_TOPIC).toString())
+                        .isEqualTo(topic);
 
                 @SuppressWarnings("unchecked")
                 Map<String, Object> receivedPayload = objectMapper.readValue(response.getBody(), Map.class);
@@ -101,7 +104,7 @@ class RabbitMqMessageTransportTest {
 
             // Assert
             try (Channel channel = connectionManager.createChannel()) {
-                GetResponse response = channel.basicGet("task.process-payment.execute", true);
+                GetResponse response = channel.basicGet(RabbitMqTopologyInitializer.EXECUTE_QUEUE, true);
 
                 assertThat(response).isNotNull();
                 assertThat(response.getProps().getContentType()).isEqualTo("application/json");
@@ -109,8 +112,8 @@ class RabbitMqMessageTransportTest {
         }
 
         @Test
-        @DisplayName("sets x-correlation-id header alongside correlationId property")
-        void setsCorrelationIdHeader() throws Exception {
+        @DisplayName("sets x-correlation-id and x-task-topic headers")
+        void setsCorrelationIdAndTopicHeaders() throws Exception {
             // Arrange
             String topic = "audit-log";
             UUID correlationId = UUID.randomUUID();
@@ -121,13 +124,15 @@ class RabbitMqMessageTransportTest {
 
             // Assert
             try (Channel channel = connectionManager.createChannel()) {
-                GetResponse response = channel.basicGet("task.audit-log.execute", true);
+                GetResponse response = channel.basicGet(RabbitMqTopologyInitializer.EXECUTE_QUEUE, true);
 
                 assertThat(response).isNotNull();
                 Map<String, Object> headers = response.getProps().getHeaders();
                 assertThat(headers).isNotNull();
                 assertThat(headers.get("x-correlation-id").toString())
                         .isEqualTo(correlationId.toString());
+                assertThat(headers.get(CorrelationIdResolver.HEADER_TASK_TOPIC).toString())
+                        .isEqualTo(topic);
             }
         }
     }
@@ -137,7 +142,7 @@ class RabbitMqMessageTransportTest {
     class Subscribe {
 
         @Test
-        @DisplayName("callback receives correct MessageResult when result is published")
+        @DisplayName("callback receives correct MessageResult when result is published with topic header")
         void callbackReceivesMessageResult() throws Exception {
             // Arrange
             String topic = "calculate-tax";
@@ -152,18 +157,21 @@ class RabbitMqMessageTransportTest {
                 latch.countDown();
             });
 
-            // Act — publish a result message directly to the result queue
+            // Act — publish a result message directly to the shared result queue
             try (Channel channel = connectionManager.createChannel()) {
                 AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder()
                         .correlationId(correlationId.toString())
                         .contentType("application/json")
-                        .headers(Map.of("x-correlation-id", correlationId.toString()))
+                        .headers(Map.of(
+                                "x-correlation-id", correlationId.toString(),
+                                CorrelationIdResolver.HEADER_TASK_TOPIC, topic
+                        ))
                         .build();
 
                 byte[] body = objectMapper.writeValueAsBytes(resultPayload);
                 channel.basicPublish(
                         config.getTasksExchange(),
-                        "task.calculate-tax.result",
+                        RabbitMqTopologyInitializer.RESULT_QUEUE,
                         properties,
                         body
                 );
@@ -206,13 +214,16 @@ class RabbitMqMessageTransportTest {
                 AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder()
                         .correlationId(correlationId.toString())
                         .contentType("application/json")
-                        .headers(Map.of("x-correlation-id", correlationId.toString()))
+                        .headers(Map.of(
+                                "x-correlation-id", correlationId.toString(),
+                                CorrelationIdResolver.HEADER_TASK_TOPIC, topic
+                        ))
                         .build();
 
                 byte[] body = objectMapper.writeValueAsBytes(errorPayload);
                 channel.basicPublish(
                         config.getTasksExchange(),
-                        "task.validate-doc.result",
+                        RabbitMqTopologyInitializer.RESULT_QUEUE,
                         properties,
                         body
                 );
@@ -227,6 +238,67 @@ class RabbitMqMessageTransportTest {
             assertThat(result.correlationId()).isEqualTo(correlationId);
             assertThat(result.success()).isFalse();
             assertThat(result.errorCode()).isEqualTo("VALIDATION_FAILED");
+        }
+
+        @Test
+        @DisplayName("dispatches results to correct callback based on topic header")
+        void dispatchesToCorrectCallback() throws Exception {
+            // Arrange
+            String topicA = "topic-alpha";
+            String topicB = "topic-beta";
+            UUID correlationIdA = UUID.randomUUID();
+            UUID correlationIdB = UUID.randomUUID();
+
+            CountDownLatch latchA = new CountDownLatch(1);
+            CountDownLatch latchB = new CountDownLatch(1);
+            AtomicReference<MessageTransport.MessageResult> resultA = new AtomicReference<>();
+            AtomicReference<MessageTransport.MessageResult> resultB = new AtomicReference<>();
+
+            messageTransport.subscribe(topicA, result -> {
+                resultA.set(result);
+                latchA.countDown();
+            });
+            messageTransport.subscribe(topicB, result -> {
+                resultB.set(result);
+                latchB.countDown();
+            });
+
+            // Act — publish results for both topics to the shared result queue
+            try (Channel channel = connectionManager.createChannel()) {
+                AMQP.BasicProperties propsA = new AMQP.BasicProperties.Builder()
+                        .correlationId(correlationIdA.toString())
+                        .contentType("application/json")
+                        .headers(Map.of(
+                                "x-correlation-id", correlationIdA.toString(),
+                                CorrelationIdResolver.HEADER_TASK_TOPIC, topicA
+                        ))
+                        .build();
+                channel.basicPublish(config.getTasksExchange(),
+                        RabbitMqTopologyInitializer.RESULT_QUEUE, propsA,
+                        objectMapper.writeValueAsBytes(Map.of("from", "alpha")));
+
+                AMQP.BasicProperties propsB = new AMQP.BasicProperties.Builder()
+                        .correlationId(correlationIdB.toString())
+                        .contentType("application/json")
+                        .headers(Map.of(
+                                "x-correlation-id", correlationIdB.toString(),
+                                CorrelationIdResolver.HEADER_TASK_TOPIC, topicB
+                        ))
+                        .build();
+                channel.basicPublish(config.getTasksExchange(),
+                        RabbitMqTopologyInitializer.RESULT_QUEUE, propsB,
+                        objectMapper.writeValueAsBytes(Map.of("from", "beta")));
+            }
+
+            // Assert
+            assertThat(latchA.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(latchB.await(10, TimeUnit.SECONDS)).isTrue();
+
+            assertThat(resultA.get().correlationId()).isEqualTo(correlationIdA);
+            assertThat(resultA.get().payload()).containsEntry("from", "alpha");
+
+            assertThat(resultB.get().correlationId()).isEqualTo(correlationIdB);
+            assertThat(resultB.get().payload()).containsEntry("from", "beta");
         }
     }
 }

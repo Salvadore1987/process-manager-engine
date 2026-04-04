@@ -1,456 +1,140 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
-                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
-                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                  id="Definitions_1"
-                  targetNamespace="http://bpmn.io/schema/bpmn"
-                  exporter="Camunda Modeler"
-                  exporterVersion="5.x">
-
-  <!--
-    ============================================================
-    Order Processing — референсный процесс для Process Manager Engine
-    ============================================================
-
-    Покрытые элементы движка:
-      ✓ StartEvent
-      ✓ EndEvent (normal + error)
-      ✓ ServiceTask (external-task, topic)
-      ✓ ExclusiveGateway (split + merge)
-      ✓ ParallelGateway (fork + join)
-      ✓ CallActivity (вызов процесса payment-processing)
-      ✓ TimerBoundaryEvent
-      ✓ ErrorBoundaryEvent
-      ✓ CompensationBoundaryEvent
-
-    Дочерний процесс payment-processing описан в отдельном файле:
-      example-payment-process.bpmn
-
-    Переменные не маппятся между процессами — дочерний процесс
-    читает данные из EventStore по parentProcessInstanceId.
-
-    Сценарий:
-      1. Получаем заказ → валидируем
-      2. ExclusiveGateway: сумма > 10000 → расширенная проверка, иначе → стандартный путь
-      3. ParallelGateway: параллельно резервируем товар + обрабатываем оплату
-      4. Оплата через CallActivity → запускает процесс payment-processing
-      5. На CallActivity — ErrorBoundaryEvent (ошибка платежа в дочернем процессе)
-      6. На резерве товара — TimerBoundaryEvent (таймаут склада)
-      7. CompensationBoundaryEvent на CallActivity оплаты — откат при сбое доставки
-      8. Формируем доставку → завершаем
-  -->
-
-  <!-- ============================================================ -->
-  <!-- PROCESS 1: ORDER PROCESSING (основной)                       -->
-  <!-- ============================================================ -->
-
-  <bpmn:process id="order-processing" name="Order Processing" isExecutable="true">
-
-    <!-- ==================== START ==================== -->
-
-    <bpmn:startEvent id="StartEvent_OrderReceived" name="Order Received">
-      <bpmn:outgoing>Flow_ToValidation</bpmn:outgoing>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_0icka4n" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.31.0" modeler:executionPlatform="Camunda Platform" modeler:executionPlatformVersion="7.22.0">
+  <bpmn:process id="order-process" name="Order Process" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1">
+      <bpmn:outgoing>Flow_1pdxxnj</bpmn:outgoing>
     </bpmn:startEvent>
-
-    <!-- ==================== VALIDATE ORDER ==================== -->
-
-    <bpmn:serviceTask id="Task_ValidateOrder" name="Validate Order"
-                      camunda:type="external"
-                      camunda:topic="order.validate">
-      <bpmn:incoming>Flow_ToValidation</bpmn:incoming>
-      <bpmn:outgoing>Flow_ToAmountCheck</bpmn:outgoing>
+    <bpmn:sequenceFlow id="Flow_1pdxxnj" sourceRef="StartEvent_1" targetRef="validate-order" />
+    <bpmn:serviceTask id="validate-order" name="Validate Order" camunda:type="external" camunda:topic="order.validate">
+      <bpmn:incoming>Flow_1pdxxnj</bpmn:incoming>
+      <bpmn:outgoing>Flow_0nat7o9</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <!-- ==================== EXCLUSIVE GATEWAY: CHECK AMOUNT ==================== -->
-
-    <bpmn:exclusiveGateway id="Gateway_AmountCheck" name="Order Amount?">
-      <bpmn:incoming>Flow_ToAmountCheck</bpmn:incoming>
-      <bpmn:outgoing>Flow_HighValue</bpmn:outgoing>
-      <bpmn:outgoing>Flow_StandardValue</bpmn:outgoing>
-    </bpmn:exclusiveGateway>
-
-    <bpmn:serviceTask id="Task_FraudCheck" name="Fraud Check"
-                      camunda:type="external"
-                      camunda:topic="order.fraud-check">
-      <bpmn:incoming>Flow_HighValue</bpmn:incoming>
-      <bpmn:outgoing>Flow_FraudToMerge</bpmn:outgoing>
-    </bpmn:serviceTask>
-
-    <bpmn:exclusiveGateway id="Gateway_AmountMerge" name="Merge Amount Check">
-      <bpmn:incoming>Flow_FraudToMerge</bpmn:incoming>
-      <bpmn:incoming>Flow_StandardValue</bpmn:incoming>
-      <bpmn:outgoing>Flow_ToParallelFork</bpmn:outgoing>
-    </bpmn:exclusiveGateway>
-
-    <!-- ==================== PARALLEL GATEWAY: FORK ==================== -->
-
-    <bpmn:parallelGateway id="Gateway_ParallelFork" name="Fork: Stock + Payment">
-      <bpmn:incoming>Flow_ToParallelFork</bpmn:incoming>
-      <bpmn:outgoing>Flow_ToReserveStock</bpmn:outgoing>
-      <bpmn:outgoing>Flow_ToPaymentCallActivity</bpmn:outgoing>
+    <bpmn:sequenceFlow id="Flow_0nat7o9" sourceRef="validate-order" targetRef="Gateway_0ykp3i4" />
+    <bpmn:sequenceFlow id="Flow_0443m3i" sourceRef="Gateway_0ykp3i4" targetRef="book-order" />
+    <bpmn:sequenceFlow id="Flow_0ehaciq" sourceRef="Gateway_0ykp3i4" targetRef="notify-booking" />
+    <bpmn:parallelGateway id="Gateway_0ykp3i4">
+      <bpmn:incoming>Flow_0nat7o9</bpmn:incoming>
+      <bpmn:outgoing>Flow_0443m3i</bpmn:outgoing>
+      <bpmn:outgoing>Flow_0ehaciq</bpmn:outgoing>
     </bpmn:parallelGateway>
-
-    <!-- ==================== BRANCH 1: RESERVE STOCK + TIMER BOUNDARY ==================== -->
-
-    <bpmn:serviceTask id="Task_ReserveStock" name="Reserve Stock"
-                      camunda:type="external"
-                      camunda:topic="warehouse.reserve">
-      <bpmn:incoming>Flow_ToReserveStock</bpmn:incoming>
-      <bpmn:outgoing>Flow_StockToJoin</bpmn:outgoing>
+    <bpmn:serviceTask id="book-order" name="Book Order" camunda:type="external" camunda:topic="order.book">
+      <bpmn:incoming>Flow_0443m3i</bpmn:incoming>
+      <bpmn:outgoing>Flow_1j007l9</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <!-- TimerBoundaryEvent: таймаут 30 минут на ответ от склада -->
-    <bpmn:boundaryEvent id="BoundaryEvent_StockTimeout" name="Stock Timeout 30m"
-                        attachedToRef="Task_ReserveStock" cancelActivity="true">
-      <bpmn:outgoing>Flow_TimeoutToNotify</bpmn:outgoing>
-      <bpmn:timerEventDefinition id="TimerDef_StockTimeout">
-        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT30M</bpmn:timeDuration>
-      </bpmn:timerEventDefinition>
-    </bpmn:boundaryEvent>
-
-    <bpmn:serviceTask id="Task_NotifyStockTimeout" name="Notify Stock Timeout"
-                      camunda:type="external"
-                      camunda:topic="notification.stock-timeout">
-      <bpmn:incoming>Flow_TimeoutToNotify</bpmn:incoming>
-      <bpmn:outgoing>Flow_TimeoutToErrorEnd</bpmn:outgoing>
+    <bpmn:serviceTask id="notify-booking" name="Notify booking" camunda:type="external" camunda:topic="order.notify">
+      <bpmn:incoming>Flow_0ehaciq</bpmn:incoming>
+      <bpmn:outgoing>Flow_0r24pkb</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <bpmn:endEvent id="EndEvent_StockTimeout" name="Order Failed: Stock Timeout">
-      <bpmn:incoming>Flow_TimeoutToErrorEnd</bpmn:incoming>
-      <bpmn:errorEventDefinition id="ErrorDef_StockTimeout" errorRef="Error_StockTimeout" />
-    </bpmn:endEvent>
-
-    <!-- ==================== BRANCH 2: PAYMENT VIA CALL ACTIVITY ==================== -->
-
-    <!--
-      CallActivity вызывает процесс payment-processing.
-      Без camunda:in/camunda:out — переменные не маппятся.
-      Дочерний процесс читает данные из EventStore по parentProcessInstanceId.
-    -->
-    <bpmn:callActivity id="CallActivity_Payment" name="Payment Processing"
-                       calledElement="payment-processing">
-      <bpmn:incoming>Flow_ToPaymentCallActivity</bpmn:incoming>
-      <bpmn:outgoing>Flow_PaymentToJoin</bpmn:outgoing>
-    </bpmn:callActivity>
-
-    <!-- ErrorBoundaryEvent: ошибка оплаты в дочернем процессе -->
-    <bpmn:boundaryEvent id="BoundaryEvent_PaymentError" name="Payment Failed"
-                        attachedToRef="CallActivity_Payment" cancelActivity="true">
-      <bpmn:outgoing>Flow_PaymentErrorToNotify</bpmn:outgoing>
-      <bpmn:errorEventDefinition id="ErrorDef_PaymentFailed" errorRef="Error_PaymentFailed" />
-    </bpmn:boundaryEvent>
-
-    <bpmn:serviceTask id="Task_NotifyPaymentFailure" name="Notify Payment Failure"
-                      camunda:type="external"
-                      camunda:topic="notification.payment-failed">
-      <bpmn:incoming>Flow_PaymentErrorToNotify</bpmn:incoming>
-      <bpmn:outgoing>Flow_PaymentFailToEnd</bpmn:outgoing>
-    </bpmn:serviceTask>
-
-    <bpmn:endEvent id="EndEvent_PaymentFailed" name="Order Failed: Payment Error">
-      <bpmn:incoming>Flow_PaymentFailToEnd</bpmn:incoming>
-      <bpmn:errorEventDefinition id="ErrorDef_OrderPaymentFailed" errorRef="Error_PaymentFailed" />
-    </bpmn:endEvent>
-
-    <!-- CompensationBoundaryEvent: откат оплаты если доставка не удалась -->
-    <bpmn:boundaryEvent id="BoundaryEvent_PaymentCompensation" name="Compensate Payment"
-                        attachedToRef="CallActivity_Payment">
-      <bpmn:compensateEventDefinition id="CompensateDef_Payment" />
-    </bpmn:boundaryEvent>
-
-    <bpmn:serviceTask id="Task_RefundPayment" name="Refund Payment"
-                      camunda:type="external"
-                      camunda:topic="payment.refund"
-                      isForCompensation="true">
-    </bpmn:serviceTask>
-
-    <!-- ==================== PARALLEL GATEWAY: JOIN ==================== -->
-
-    <bpmn:parallelGateway id="Gateway_ParallelJoin" name="Join: Stock + Payment">
-      <bpmn:incoming>Flow_StockToJoin</bpmn:incoming>
-      <bpmn:incoming>Flow_PaymentToJoin</bpmn:incoming>
-      <bpmn:outgoing>Flow_ToShipping</bpmn:outgoing>
+    <bpmn:sequenceFlow id="Flow_1j007l9" sourceRef="book-order" targetRef="Gateway_0iyq7ut" />
+    <bpmn:parallelGateway id="Gateway_0iyq7ut">
+      <bpmn:incoming>Flow_1j007l9</bpmn:incoming>
+      <bpmn:incoming>Flow_0r24pkb</bpmn:incoming>
+      <bpmn:outgoing>Flow_1q7s1w8</bpmn:outgoing>
     </bpmn:parallelGateway>
-
-    <!-- ==================== SHIPPING ==================== -->
-
-    <bpmn:serviceTask id="Task_ArrangeShipping" name="Arrange Shipping"
-                      camunda:type="external"
-                      camunda:topic="shipping.arrange">
-      <bpmn:incoming>Flow_ToShipping</bpmn:incoming>
-      <bpmn:outgoing>Flow_ToConfirmation</bpmn:outgoing>
+    <bpmn:sequenceFlow id="Flow_0r24pkb" sourceRef="notify-booking" targetRef="Gateway_0iyq7ut" />
+    <bpmn:sequenceFlow id="Flow_1q7s1w8" sourceRef="Gateway_0iyq7ut" targetRef="charge-payment" />
+    <bpmn:serviceTask id="charge-payment" name="Charge Payment" camunda:type="external" camunda:topic="order.payment.charge">
+      <bpmn:incoming>Flow_1q7s1w8</bpmn:incoming>
+      <bpmn:outgoing>Flow_09qx15f</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <bpmn:serviceTask id="Task_SendConfirmation" name="Send Order Confirmation"
-                      camunda:type="external"
-                      camunda:topic="notification.order-confirmed">
-      <bpmn:incoming>Flow_ToConfirmation</bpmn:incoming>
-      <bpmn:outgoing>Flow_ToEnd</bpmn:outgoing>
-    </bpmn:serviceTask>
-
-    <!-- ==================== END ==================== -->
-
-    <bpmn:endEvent id="EndEvent_OrderCompleted" name="Order Completed">
-      <bpmn:incoming>Flow_ToEnd</bpmn:incoming>
+    <bpmn:sequenceFlow id="Flow_09qx15f" sourceRef="charge-payment" targetRef="deliver-order" />
+    <bpmn:endEvent id="Event_1mawk0s">
+      <bpmn:incoming>Flow_0v4h3d9</bpmn:incoming>
     </bpmn:endEvent>
-
-    <!-- ==================== SEQUENCE FLOWS ==================== -->
-
-    <bpmn:sequenceFlow id="Flow_ToValidation"
-                       sourceRef="StartEvent_OrderReceived" targetRef="Task_ValidateOrder" />
-
-    <bpmn:sequenceFlow id="Flow_ToAmountCheck"
-                       sourceRef="Task_ValidateOrder" targetRef="Gateway_AmountCheck" />
-
-    <bpmn:sequenceFlow id="Flow_HighValue" name="amount &gt; 10000"
-                       sourceRef="Gateway_AmountCheck" targetRef="Task_FraudCheck">
-      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">
-        ${orderAmount &gt; 10000}
-      </bpmn:conditionExpression>
-    </bpmn:sequenceFlow>
-
-    <bpmn:sequenceFlow id="Flow_StandardValue" name="amount &lt;= 10000"
-                       sourceRef="Gateway_AmountCheck" targetRef="Gateway_AmountMerge">
-      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">
-        ${orderAmount &lt;= 10000}
-      </bpmn:conditionExpression>
-    </bpmn:sequenceFlow>
-
-    <bpmn:sequenceFlow id="Flow_FraudToMerge"
-                       sourceRef="Task_FraudCheck" targetRef="Gateway_AmountMerge" />
-
-    <bpmn:sequenceFlow id="Flow_ToParallelFork"
-                       sourceRef="Gateway_AmountMerge" targetRef="Gateway_ParallelFork" />
-
-    <bpmn:sequenceFlow id="Flow_ToReserveStock"
-                       sourceRef="Gateway_ParallelFork" targetRef="Task_ReserveStock" />
-
-    <bpmn:sequenceFlow id="Flow_ToPaymentCallActivity"
-                       sourceRef="Gateway_ParallelFork" targetRef="CallActivity_Payment" />
-
-    <bpmn:sequenceFlow id="Flow_StockToJoin"
-                       sourceRef="Task_ReserveStock" targetRef="Gateway_ParallelJoin" />
-
-    <bpmn:sequenceFlow id="Flow_PaymentToJoin"
-                       sourceRef="CallActivity_Payment" targetRef="Gateway_ParallelJoin" />
-
-    <bpmn:sequenceFlow id="Flow_ToShipping"
-                       sourceRef="Gateway_ParallelJoin" targetRef="Task_ArrangeShipping" />
-
-    <bpmn:sequenceFlow id="Flow_ToConfirmation"
-                       sourceRef="Task_ArrangeShipping" targetRef="Task_SendConfirmation" />
-
-    <bpmn:sequenceFlow id="Flow_ToEnd"
-                       sourceRef="Task_SendConfirmation" targetRef="EndEvent_OrderCompleted" />
-
-    <bpmn:sequenceFlow id="Flow_TimeoutToNotify"
-                       sourceRef="BoundaryEvent_StockTimeout" targetRef="Task_NotifyStockTimeout" />
-
-    <bpmn:sequenceFlow id="Flow_TimeoutToErrorEnd"
-                       sourceRef="Task_NotifyStockTimeout" targetRef="EndEvent_StockTimeout" />
-
-    <bpmn:sequenceFlow id="Flow_PaymentErrorToNotify"
-                       sourceRef="BoundaryEvent_PaymentError" targetRef="Task_NotifyPaymentFailure" />
-
-    <bpmn:sequenceFlow id="Flow_PaymentFailToEnd"
-                       sourceRef="Task_NotifyPaymentFailure" targetRef="EndEvent_PaymentFailed" />
-
-    <!-- ==================== ASSOCIATIONS ==================== -->
-
-    <bpmn:association id="Association_Compensation"
-                      associationDirection="One"
-                      sourceRef="BoundaryEvent_PaymentCompensation"
-                      targetRef="Task_RefundPayment" />
-
+    <bpmn:sequenceFlow id="Flow_0v4h3d9" sourceRef="deliver-order" targetRef="Event_1mawk0s" />
+    <bpmn:boundaryEvent id="Event_0q9wgwn" attachedToRef="charge-payment">
+      <bpmn:compensateEventDefinition id="CompensateEventDefinition_0tfp9xj" />
+    </bpmn:boundaryEvent>
+    <bpmn:serviceTask id="refund-payment" name="Refund Payment" isForCompensation="true" camunda:type="external" camunda:topic="order.payment.refund" />
+    <bpmn:serviceTask id="deliver-order" name="Deliver Order" camunda:type="external" camunda:topic="order.deliver">
+      <bpmn:incoming>Flow_09qx15f</bpmn:incoming>
+      <bpmn:outgoing>Flow_0v4h3d9</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:association id="Association_1r83vnb" associationDirection="One" sourceRef="Event_0q9wgwn" targetRef="refund-payment" />
   </bpmn:process>
-
-  <!-- ==================== ERROR DEFINITIONS ==================== -->
-
-  <bpmn:error id="Error_PaymentFailed" name="Payment Failed" errorCode="PAYMENT_FAILED" />
-  <bpmn:error id="Error_StockTimeout" name="Stock Timeout" errorCode="STOCK_TIMEOUT" />
-
-  <!-- ==================== DIAGRAM ==================== -->
-
-  <bpmndi:BPMNDiagram id="BPMNDiagram_OrderProcessing">
-    <bpmndi:BPMNPlane id="BPMNPlane_OrderProcessing" bpmnElement="order-processing">
-
-      <bpmndi:BPMNShape id="Shape_StartEvent" bpmnElement="StartEvent_OrderReceived">
-        <dc:Bounds x="160" y="290" width="36" height="36" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="order-process">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="182" y="222" width="36" height="36" />
       </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_ValidateOrder" bpmnElement="Task_ValidateOrder">
-        <dc:Bounds x="250" y="268" width="100" height="80" />
+      <bpmndi:BPMNShape id="Activity_06rx7qu_di" bpmnElement="validate-order">
+        <dc:Bounds x="270" y="200" width="100" height="80" />
+        <bpmndi:BPMNLabel />
       </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_AmountCheck" bpmnElement="Gateway_AmountCheck" isMarkerVisible="true">
-        <dc:Bounds x="405" y="283" width="50" height="50" />
+      <bpmndi:BPMNShape id="Gateway_0fs4gku_di" bpmnElement="Gateway_0ykp3i4">
+        <dc:Bounds x="425" y="215" width="50" height="50" />
       </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_FraudCheck" bpmnElement="Task_FraudCheck">
-        <dc:Bounds x="490" y="170" width="100" height="80" />
+      <bpmndi:BPMNShape id="Activity_0fl4y8m_di" bpmnElement="book-order">
+        <dc:Bounds x="530" y="80" width="100" height="80" />
+        <bpmndi:BPMNLabel />
       </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_AmountMerge" bpmnElement="Gateway_AmountMerge" isMarkerVisible="true">
-        <dc:Bounds x="640" y="283" width="50" height="50" />
+      <bpmndi:BPMNShape id="Activity_03ddnu8_di" bpmnElement="notify-booking">
+        <dc:Bounds x="530" y="310" width="100" height="80" />
+        <bpmndi:BPMNLabel />
       </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_ParallelFork" bpmnElement="Gateway_ParallelFork">
-        <dc:Bounds x="740" y="283" width="50" height="50" />
+      <bpmndi:BPMNShape id="Gateway_14e71dx_di" bpmnElement="Gateway_0iyq7ut">
+        <dc:Bounds x="685" y="215" width="50" height="50" />
       </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_ReserveStock" bpmnElement="Task_ReserveStock">
-        <dc:Bounds x="850" y="170" width="100" height="80" />
+      <bpmndi:BPMNShape id="Activity_03k3op0_di" bpmnElement="charge-payment">
+        <dc:Bounds x="790" y="200" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_StockTimeout" bpmnElement="BoundaryEvent_StockTimeout">
-        <dc:Bounds x="882" y="232" width="36" height="36" />
+      <bpmndi:BPMNShape id="Event_1mawk0s_di" bpmnElement="Event_1mawk0s">
+        <dc:Bounds x="1112" y="222" width="36" height="36" />
       </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_NotifyStockTimeout" bpmnElement="Task_NotifyStockTimeout">
-        <dc:Bounds x="960" y="80" width="100" height="80" />
+      <bpmndi:BPMNShape id="Activity_0lvekog_di" bpmnElement="refund-payment">
+        <dc:Bounds x="950" y="320" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_EndStockTimeout" bpmnElement="EndEvent_StockTimeout">
-        <dc:Bounds x="1110" y="102" width="36" height="36" />
+      <bpmndi:BPMNShape id="Activity_033o9qp_di" bpmnElement="deliver-order">
+        <dc:Bounds x="950" y="200" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_CallActivityPayment" bpmnElement="CallActivity_Payment">
-        <dc:Bounds x="850" y="380" width="100" height="80" />
+      <bpmndi:BPMNShape id="Event_1s308hj_di" bpmnElement="Event_0q9wgwn">
+        <dc:Bounds x="842" y="262" width="36" height="36" />
       </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_PaymentError" bpmnElement="BoundaryEvent_PaymentError">
-        <dc:Bounds x="852" y="442" width="36" height="36" />
-      </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_PaymentCompensation" bpmnElement="BoundaryEvent_PaymentCompensation">
-        <dc:Bounds x="932" y="442" width="36" height="36" />
-      </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_NotifyPaymentFailure" bpmnElement="Task_NotifyPaymentFailure">
-        <dc:Bounds x="830" y="530" width="100" height="80" />
-      </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_EndPaymentFailed" bpmnElement="EndEvent_PaymentFailed">
-        <dc:Bounds x="980" y="552" width="36" height="36" />
-      </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_RefundPayment" bpmnElement="Task_RefundPayment">
-        <dc:Bounds x="1000" y="440" width="100" height="80" />
-      </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_ParallelJoin" bpmnElement="Gateway_ParallelJoin">
-        <dc:Bounds x="1160" y="283" width="50" height="50" />
-      </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_ArrangeShipping" bpmnElement="Task_ArrangeShipping">
-        <dc:Bounds x="1270" y="268" width="100" height="80" />
-      </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_SendConfirmation" bpmnElement="Task_SendConfirmation">
-        <dc:Bounds x="1430" y="268" width="100" height="80" />
-      </bpmndi:BPMNShape>
-
-      <bpmndi:BPMNShape id="Shape_EndEvent" bpmnElement="EndEvent_OrderCompleted">
-        <dc:Bounds x="1590" y="290" width="36" height="36" />
-      </bpmndi:BPMNShape>
-
-      <!-- Sequence Flow edges -->
-      <bpmndi:BPMNEdge id="Edge_ToValidation" bpmnElement="Flow_ToValidation">
-        <di:waypoint x="196" y="308" />
-        <di:waypoint x="250" y="308" />
+      <bpmndi:BPMNEdge id="Flow_1pdxxnj_di" bpmnElement="Flow_1pdxxnj">
+        <di:waypoint x="218" y="240" />
+        <di:waypoint x="270" y="240" />
       </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_ToAmountCheck" bpmnElement="Flow_ToAmountCheck">
-        <di:waypoint x="350" y="308" />
-        <di:waypoint x="405" y="308" />
+      <bpmndi:BPMNEdge id="Flow_0nat7o9_di" bpmnElement="Flow_0nat7o9">
+        <di:waypoint x="370" y="240" />
+        <di:waypoint x="425" y="240" />
       </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_HighValue" bpmnElement="Flow_HighValue">
-        <di:waypoint x="430" y="283" />
-        <di:waypoint x="430" y="210" />
-        <di:waypoint x="490" y="210" />
+      <bpmndi:BPMNEdge id="Flow_0443m3i_di" bpmnElement="Flow_0443m3i">
+        <di:waypoint x="450" y="215" />
+        <di:waypoint x="450" y="120" />
+        <di:waypoint x="530" y="120" />
       </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_StandardValue" bpmnElement="Flow_StandardValue">
-        <di:waypoint x="455" y="308" />
-        <di:waypoint x="640" y="308" />
+      <bpmndi:BPMNEdge id="Flow_0ehaciq_di" bpmnElement="Flow_0ehaciq">
+        <di:waypoint x="450" y="265" />
+        <di:waypoint x="450" y="350" />
+        <di:waypoint x="530" y="350" />
       </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_FraudToMerge" bpmnElement="Flow_FraudToMerge">
-        <di:waypoint x="590" y="210" />
-        <di:waypoint x="665" y="210" />
-        <di:waypoint x="665" y="283" />
+      <bpmndi:BPMNEdge id="Flow_1j007l9_di" bpmnElement="Flow_1j007l9">
+        <di:waypoint x="630" y="120" />
+        <di:waypoint x="710" y="120" />
+        <di:waypoint x="710" y="215" />
       </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_ToParallelFork" bpmnElement="Flow_ToParallelFork">
-        <di:waypoint x="690" y="308" />
-        <di:waypoint x="740" y="308" />
+      <bpmndi:BPMNEdge id="Flow_0r24pkb_di" bpmnElement="Flow_0r24pkb">
+        <di:waypoint x="630" y="350" />
+        <di:waypoint x="710" y="350" />
+        <di:waypoint x="710" y="265" />
       </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_ToReserveStock" bpmnElement="Flow_ToReserveStock">
-        <di:waypoint x="765" y="283" />
-        <di:waypoint x="765" y="210" />
-        <di:waypoint x="850" y="210" />
+      <bpmndi:BPMNEdge id="Flow_1q7s1w8_di" bpmnElement="Flow_1q7s1w8">
+        <di:waypoint x="735" y="240" />
+        <di:waypoint x="790" y="240" />
       </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_ToPaymentCallActivity" bpmnElement="Flow_ToPaymentCallActivity">
-        <di:waypoint x="765" y="333" />
-        <di:waypoint x="765" y="420" />
-        <di:waypoint x="850" y="420" />
+      <bpmndi:BPMNEdge id="Flow_09qx15f_di" bpmnElement="Flow_09qx15f">
+        <di:waypoint x="890" y="240" />
+        <di:waypoint x="950" y="240" />
       </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_StockToJoin" bpmnElement="Flow_StockToJoin">
-        <di:waypoint x="950" y="210" />
-        <di:waypoint x="1185" y="210" />
-        <di:waypoint x="1185" y="283" />
+      <bpmndi:BPMNEdge id="Flow_0v4h3d9_di" bpmnElement="Flow_0v4h3d9">
+        <di:waypoint x="1050" y="240" />
+        <di:waypoint x="1112" y="240" />
       </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_PaymentToJoin" bpmnElement="Flow_PaymentToJoin">
-        <di:waypoint x="950" y="420" />
-        <di:waypoint x="1185" y="420" />
-        <di:waypoint x="1185" y="333" />
+      <bpmndi:BPMNEdge id="Association_1r83vnb_di" bpmnElement="Association_1r83vnb">
+        <di:waypoint x="860" y="298" />
+        <di:waypoint x="860" y="360" />
+        <di:waypoint x="950" y="360" />
       </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_ToShipping" bpmnElement="Flow_ToShipping">
-        <di:waypoint x="1210" y="308" />
-        <di:waypoint x="1270" y="308" />
-      </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_ToConfirmation" bpmnElement="Flow_ToConfirmation">
-        <di:waypoint x="1370" y="308" />
-        <di:waypoint x="1430" y="308" />
-      </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_ToEnd" bpmnElement="Flow_ToEnd">
-        <di:waypoint x="1530" y="308" />
-        <di:waypoint x="1590" y="308" />
-      </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_TimeoutToNotify" bpmnElement="Flow_TimeoutToNotify">
-        <di:waypoint x="900" y="232" />
-        <di:waypoint x="900" y="120" />
-        <di:waypoint x="960" y="120" />
-      </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_TimeoutToErrorEnd" bpmnElement="Flow_TimeoutToErrorEnd">
-        <di:waypoint x="1060" y="120" />
-        <di:waypoint x="1110" y="120" />
-      </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_PaymentErrorToNotify" bpmnElement="Flow_PaymentErrorToNotify">
-        <di:waypoint x="870" y="478" />
-        <di:waypoint x="870" y="530" />
-      </bpmndi:BPMNEdge>
-
-      <bpmndi:BPMNEdge id="Edge_PaymentFailToEnd" bpmnElement="Flow_PaymentFailToEnd">
-        <di:waypoint x="930" y="570" />
-        <di:waypoint x="980" y="570" />
-      </bpmndi:BPMNEdge>
-
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
-
 </bpmn:definitions>

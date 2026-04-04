@@ -13,6 +13,7 @@ import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import uz.salvadore.processengine.rabbitmq.config.RabbitMqTransportConfig;
+import uz.salvadore.processengine.rabbitmq.correlation.CorrelationIdResolver;
 
 import java.util.Map;
 import java.util.UUID;
@@ -53,12 +54,10 @@ class RabbitMqRetryFlowTest {
     }
 
     @Test
-    @DisplayName("nacked message from execute queue is routed to DLQ")
+    @DisplayName("nacked message from shared execute queue is routed to DLQ")
     void nackedMessageRoutesToDlq() throws Exception {
         // Arrange
         String topic = "process-order";
-        topologyInitializer.ensureTopicQueues(topic);
-
         UUID correlationId = UUID.randomUUID();
         Map<String, Object> payload = Map.of("orderId", "ORD-123");
         byte[] body = objectMapper.writeValueAsBytes(payload);
@@ -67,13 +66,14 @@ class RabbitMqRetryFlowTest {
                 .correlationId(correlationId.toString())
                 .contentType("application/json")
                 .deliveryMode(2)
+                .headers(Map.of(CorrelationIdResolver.HEADER_TASK_TOPIC, topic))
                 .build();
 
-        // Publish a message to the execute queue
+        // Publish a message to the shared execute queue
         try (Channel publishChannel = connectionManager.createChannel()) {
             publishChannel.basicPublish(
                     config.getTasksExchange(),
-                    "task.process-order.execute",
+                    RabbitMqTopologyInitializer.EXECUTE_QUEUE,
                     properties,
                     body
             );
@@ -82,19 +82,17 @@ class RabbitMqRetryFlowTest {
         // Act — consume and nack (reject without requeue) to trigger dead-lettering
         try (Channel consumeChannel = connectionManager.createChannel()) {
             GetResponse response = null;
-            // Poll for the message with a short retry loop (message may take a moment to arrive)
             for (int i = 0; i < 10 && response == null; i++) {
-                response = consumeChannel.basicGet("task.process-order.execute", false);
+                response = consumeChannel.basicGet(RabbitMqTopologyInitializer.EXECUTE_QUEUE, false);
                 if (response == null) {
                     TimeUnit.MILLISECONDS.sleep(200);
                 }
             }
 
             assertThat(response)
-                    .as("Message should be available in execute queue")
+                    .as("Message should be available in shared execute queue")
                     .isNotNull();
 
-            // Reject without requeue — this triggers x-dead-letter-exchange routing to DLQ
             consumeChannel.basicNack(response.getEnvelope().getDeliveryTag(), false, false);
         }
 
@@ -119,14 +117,12 @@ class RabbitMqRetryFlowTest {
     }
 
     @Test
-    @DisplayName("retry queue has dead-letter-exchange pointing back to tasks exchange")
-    void retryQueueHasCorrectDeadLetterExchangeConfig() throws Exception {
-        // Arrange
+    @DisplayName("retry queue dead-letters back to shared execute queue and preserves topic header")
+    void retryQueueDeadLettersBackToExecuteQueue() throws Exception {
+        // Arrange — publish a message to the retry queue with TTL=0 so it expires immediately
+        // and dead-letters back to the tasks exchange -> shared execute queue
         String topic = "retry-test";
-        topologyInitializer.ensureTopicQueues(topic);
 
-        // Act — publish a message to the retry queue with TTL=0 so it expires immediately
-        // and dead-letters back to the tasks exchange -> execute queue
         try (Channel channel = connectionManager.createChannel()) {
             Map<String, Object> payload = Map.of("retryAttempt", 1);
             byte[] body = objectMapper.writeValueAsBytes(payload);
@@ -135,35 +131,42 @@ class RabbitMqRetryFlowTest {
                     .contentType("application/json")
                     .deliveryMode(2)
                     .expiration("0")  // TTL=0ms, expire immediately
+                    .headers(Map.of(CorrelationIdResolver.HEADER_TASK_TOPIC, topic))
                     .build();
 
+            // Act
             channel.basicPublish(
                     config.getRetryExchange(),
-                    "task.retry-test.retry",
+                    RabbitMqTopologyInitializer.RETRY_QUEUE,
                     properties,
                     body
             );
         }
 
         // Assert — the expired message from retry queue should dead-letter
-        // back to execute queue (via x-dead-letter-exchange = tasks exchange,
-        // x-dead-letter-routing-key = task.retry-test.execute)
+        // back to the shared execute queue and preserve the topic header
         try (Channel channel = connectionManager.createChannel()) {
             GetResponse response = null;
             for (int i = 0; i < 15 && response == null; i++) {
-                response = channel.basicGet("task.retry-test.execute", true);
+                response = channel.basicGet(RabbitMqTopologyInitializer.EXECUTE_QUEUE, true);
                 if (response == null) {
                     TimeUnit.MILLISECONDS.sleep(200);
                 }
             }
 
             assertThat(response)
-                    .as("Expired retry message should dead-letter to execute queue")
+                    .as("Expired retry message should dead-letter to shared execute queue")
                     .isNotNull();
 
             @SuppressWarnings("unchecked")
             Map<String, Object> receivedPayload = objectMapper.readValue(response.getBody(), Map.class);
             assertThat(receivedPayload).containsEntry("retryAttempt", 1);
+
+            // Verify topic header is preserved through dead-lettering
+            Map<String, Object> headers = response.getProps().getHeaders();
+            assertThat(headers).isNotNull();
+            assertThat(headers.get(CorrelationIdResolver.HEADER_TASK_TOPIC).toString())
+                    .isEqualTo(topic);
         }
     }
 }

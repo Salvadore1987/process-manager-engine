@@ -58,9 +58,8 @@ public class RabbitMqTransportAutoConfiguration {
     @ConditionalOnMissingBean(MessageTransport.class)
     public RabbitMqMessageTransport rabbitMqMessageTransport(
             RabbitMqConnectionManager connectionManager,
-            RabbitMqTransportConfig config,
-            RabbitMqTopologyInitializer topologyInitializer) {
-        return new RabbitMqMessageTransport(connectionManager, config, topologyInitializer);
+            RabbitMqTransportConfig config) {
+        return new RabbitMqMessageTransport(connectionManager, config);
     }
 
     @Bean
