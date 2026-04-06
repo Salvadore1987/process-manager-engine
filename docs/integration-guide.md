@@ -144,7 +144,7 @@ Body — ошибка:
 implementation("uz.salvadore:worker-spring-boot-starter:1.0-SNAPSHOT")
 ```
 
-**2. Настроить подключение к RabbitMQ (`application.yml`):**
+**2. Настроить подключение и автодеплой (`application.yml`):**
 
 ```yaml
 process-engine:
@@ -155,9 +155,23 @@ process-engine:
       username: guest
       password: guest
       virtual-host: /
+    auto-deploy:
+      enabled: true                        # автодеплой BPMN при старте (default: true)
+      resource-location: classpath:bpmn/   # каталог с BPMN-файлами (default: classpath:bpmn/)
+      fail-on-error: true                  # ��становить приложение при ошибке деплоя (default: true)
 ```
 
-**3. Реализовать обработчик:**
+**3. Разместить BPMN-файлы в ресурсах:**
+
+```
+src/main/resources/bpmn/
+├── order-process.bpmn                    # main process
+└── charge-payment-subprocess.bpmn        # subprocess (CallActivity)
+```
+
+При ��тарте приложения все `.bpmn` файлы из каталога автоматически деплоятся. Процессы с `CallActivity` автоматически группируются в bundle с подпроцессами.
+
+**4. Реализовать о��работчик:**
 
 ```java
 @Component
@@ -182,6 +196,7 @@ public class OrderValidationHandler implements ExternalTaskHandler {
 ```
 
 Starter автоматически:
+- **Деплоит BPMN-процессы** из `classpath:bpmn/` при старте (автодеплой, включая CallActivity подпроцессы)
 - Подключается к RabbitMQ с `basicQos(1)` для защиты от дублирования сообщений
 - Слушает общую очередь `task.execute`
 - Определяет topic задачи по заголовку `x-task-topic` и направляет к нужному handler
@@ -687,7 +702,9 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/instances
 
 ## Чеклист интеграции
 
-1. **Задеплоить BPMN-определение** через `POST /api/v1/definitions`
+1. **Задеплоить BPMN-определение** — два способа:
+   - **Автодеплой (рекомендуется):** разместить `.bpmn` файлы в `src/main/resources/bpmn/` — при старте приложения с `worker-spring-boot-starter` они автоматически деплоятся (включая CallActivity подпроцессы)
+   - **Через REST API:** `POST /api/v1/definitions` (ручной деплой)
    - Общие RabbitMQ очереди (`task.execute`, `task.result`, `task.retry`) создаются при запуске движка
    - При деплое движок регистрирует result-callbacks для всех ServiceTask топиков
 2. **Реализовать worker-сервисы** для каждого `topic` из BPMN:

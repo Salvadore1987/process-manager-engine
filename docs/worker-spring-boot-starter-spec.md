@@ -28,7 +28,7 @@ The module does **not** depend on `core` or `rabbitmq-transport`. It is a self-c
 implementation("uz.salvadore:worker-spring-boot-starter:1.0-SNAPSHOT")
 ```
 
-### 2. Configure RabbitMQ (`application.yml`)
+### 2. Configure (`application.yml`)
 
 ```yaml
 process-engine:
@@ -39,9 +39,24 @@ process-engine:
       username: guest
       password: guest
       virtual-host: /
+    auto-deploy:
+      enabled: true                        # автодеплой BPMN при старте (default: true)
+      resource-location: classpath:bpmn/   # каталог с BPMN-файлами (default: classpath:bpmn/)
+      fail-on-error: true                  # остановить приложение при ошибке деплоя (default: true)
 ```
 
-### 3. Implement a worker
+### 3. Place BPMN files in resources
+
+```
+src/main/resources/
+└── bpmn/
+    ├── order-process.bpmn                  # main process (with CallActivity)
+    └── charge-payment-subprocess.bpmn      # subprocess (calledElement)
+```
+
+При старте приложения все `.bpmn` файлы из указанного каталога автоматически деплоятся в движок. Процессы с `CallActivity` автоматически группируются в bundle с их подпроцессами.
+
+### 4. Implement a worker
 
 ```java
 @Component
@@ -173,7 +188,8 @@ Worker publishes to exchange `process-engine.tasks` with routing key `task.resul
 | `WorkerRetryConfig` | Record holding per-topic retry settings (enabled, maxAttempts, backoffMs) |
 | `TaskHandlerBeanPostProcessor` | Scans beans for `ExternalTaskHandler` + `@JobWorker`, extracts retry config, registers them |
 | `TaskListenerContainer` | `SmartLifecycle`: creates RabbitMQ consumers with `basicQos(1)`, dispatches to handlers with optional retry |
-| `WorkerAutoConfiguration` | Auto-configuration: connection, registry, listeners, health |
+| `BpmnAutoDeployer` | `SmartLifecycle`: сканирует ресурсы, деплоит BPMN-файлы при старте |
+| `WorkerAutoConfiguration` | Auto-configuration: connection, registry, listeners, health, auto-deploy |
 | `WorkerProperties` | `@ConfigurationProperties("process-engine.worker")` |
 | `WorkerHealthIndicator` | Health check: RabbitMQ connection + consumer status |
 
@@ -181,7 +197,11 @@ Worker publishes to exchange `process-engine.tasks` with routing key `task.resul
 
 1. **Startup** — `WorkerAutoConfiguration` creates RabbitMQ `ConnectionFactory`
 2. **Bean scanning** — `BeanPostProcessor` finds `ExternalTaskHandler` beans with `@JobWorker`, registers in `TaskHandlerRegistry`
-3. **Consumer startup** — `TaskListenerContainer` (SmartLifecycle) creates a single consumer on shared `task.execute` queue:
+3. **BPMN auto-deploy** — `BpmnAutoDeployer` (SmartLifecycle, phase `Integer.MIN_VALUE + 300`) scans resource directory and deploys all BPMN files:
+   - Standalone processes (no CallActivity) → `ProcessEngine.deploy()`
+   - Processes with CallActivity → `ProcessEngine.deployBundle()` with all referenced subprocesses
+   - Files referenced only as subprocesses are deployed as part of their parent bundle
+4. **Consumer startup** — `TaskListenerContainer` (SmartLifecycle) creates a single consumer on shared `task.execute` queue:
    - Sets `basicQos(1)` to prevent message flooding and duplicate delivery on reconnect
    - Passive declares queue `task.execute`
    - Starts single shared consumer
@@ -217,7 +237,8 @@ worker-spring-boot-starter/
     └── autoconfigure/
         ├── WorkerAutoConfiguration.java
         ├── WorkerProperties.java
-        └── WorkerHealthIndicator.java
+        ├── WorkerHealthIndicator.java
+        └── BpmnAutoDeployer.java
 ```
 
 ---
@@ -226,6 +247,7 @@ worker-spring-boot-starter/
 
 ```kotlin
 dependencies {
+    implementation(project(":spring-integration"))
     implementation(libs.rabbitmq.client)
     implementation(libs.jackson.databind)
     implementation(libs.jackson.datatype.jsr310)
@@ -238,9 +260,54 @@ dependencies {
 
 ---
 
+## Auto-Deploy
+
+При наличии `ProcessEngine` в контексте Spring, модуль автоматически сканирует BPMN-файлы из ресурсного каталога и деплоит их при старте приложения.
+
+### Конфигурация
+
+| Property | По умолчанию | Описание |
+|----------|-------------|----------|
+| `process-engine.worker.auto-deploy.enabled` | `true` | Включить/выключить автодеплой |
+| `process-engine.worker.auto-deploy.resource-location` | `classpath:bpmn/` | Каталог с BPMN-файлами (поддерживает `classpath:` и `file:` префиксы) |
+| `process-engine.worker.auto-deploy.fail-on-error` | `true` | При ошибке деплоя остановить запуск приложения |
+
+### Алгоритм
+
+1. Сканирует `resource-location + **/*.bpmn` через `ResourcePatternResolver`
+2. Парсит каждый файл и анализирует наличие `CallActivity` элементов
+3. Строит граф зависимостей по `calledElement`
+4. Деплоит:
+   - **Standalone** процессы (без CallActivity и не вызываемые другими) → `ProcessEngine.deploy()`
+   - **Процессы с CallActivity** → `ProcessEngine.deployBundle()` (main + все подпроцессы рекурсивно)
+   - **Подпроцессы** (вызываемые через CallActivity) — деплоятся только в составе bundle, не отдельно
+
+### SmartLifecycle фаза
+
+`BpmnAutoDeployer` запускается на фазе `Integer.MIN_VALUE + 300`:
+
+| Phase | Компонент |
+|---|---|
+| `MIN_VALUE + 100` | RabbitMQ Topology |
+| `MIN_VALUE + 200` | Subscription Recovery |
+| `MIN_VALUE + 300` | **BpmnAutoDeployer** |
+| `MAX_VALUE` | TaskListenerContainer |
+
+Это гарантирует, что инфраструктура RabbitMQ и подписки готовы до деплоя, а воркеры начинают слушать очередь только после деплоя всех процессов.
+
+### Пример структуры ресурсов
+
+```
+src/main/resources/bpmn/
+├── order-process.bpmn                    # main (содержит CallActivity → charge-payment-subprocess)
+├── charge-payment-subprocess.bpmn        # subprocess (деплоится в bundle с order-process)
+└── notification-process.bpmn             # standalone (деплоится отдельно)
+```
+
+---
+
 ## Out of Scope
 
 - REST client for engine API (starting processes, lifecycle management)
 - Advanced retry strategies (exponential backoff, circuit breaker) — `@JobWorker` provides simple linear retry; complex patterns should be implemented in the handler
 - Exchange declaration (engine does this at startup)
-- Dependency on `core` or `rabbitmq-transport` modules

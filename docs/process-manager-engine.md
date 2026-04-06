@@ -174,11 +174,12 @@ OAuth2/Keycloak интеграция для авторизации REST API.
 
 **Ответственность:**
 - Автоматическое подключение к RabbitMQ и прослушивание execute-очередей
+- **Автодеплой BPMN-процессов** из ресурсного каталога при старте приложения (включая CallActivity подпроцессы)
 - `ExternalTaskHandler` — интерфейс с методом `execute(TaskContext)`
 - `@JobWorker(topic = "...")` — аннотация на методе `execute` для привязки к топику
 - `TaskContext` — доступ к переменным процесса + методы `complete()` / `error()` для ответа
 - Health indicator для мониторинга подключения и consumers
-- Не зависит от `core` или `rabbitmq-transport` — самостоятельная клиентская библиотека
+- Зависит от `spring-integration` для доступа к `ProcessEngine` (автодеплой)
 
 ### Component Overview
 

@@ -5,9 +5,12 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.rabbitmq.client.ConnectionFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.io.support.ResourcePatternResolver;
+import uz.salvadore.processengine.core.engine.ProcessEngine;
 import uz.salvadore.processengine.worker.listener.TaskListenerContainer;
 import uz.salvadore.processengine.worker.registry.TaskHandlerBeanPostProcessor;
 import uz.salvadore.processengine.worker.registry.TaskHandlerRegistry;
@@ -68,5 +71,14 @@ public class WorkerAutoConfiguration {
     @ConditionalOnMissingBean(name = "workerHealthIndicator")
     public WorkerHealthIndicator workerHealthIndicator(TaskListenerContainer listenerContainer) {
         return new WorkerHealthIndicator(listenerContainer);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(ProcessEngine.class)
+    public BpmnAutoDeployer bpmnAutoDeployer(ProcessEngine processEngine,
+                                              WorkerProperties properties,
+                                              ResourcePatternResolver resourcePatternResolver) {
+        return new BpmnAutoDeployer(processEngine, properties, resourcePatternResolver);
     }
 }

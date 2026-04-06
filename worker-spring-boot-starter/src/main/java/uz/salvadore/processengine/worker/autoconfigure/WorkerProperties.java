@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class WorkerProperties {
 
     private RabbitMqProperties rabbitmq = new RabbitMqProperties();
+    private AutoDeployProperties autoDeploy = new AutoDeployProperties();
 
     public RabbitMqProperties getRabbitmq() {
         return rabbitmq;
@@ -16,6 +17,14 @@ public class WorkerProperties {
 
     public void setRabbitmq(RabbitMqProperties rabbitmq) {
         this.rabbitmq = rabbitmq;
+    }
+
+    public AutoDeployProperties getAutoDeploy() {
+        return autoDeploy;
+    }
+
+    public void setAutoDeploy(AutoDeployProperties autoDeploy) {
+        this.autoDeploy = autoDeploy;
     }
 
     public static class RabbitMqProperties {
@@ -64,6 +73,37 @@ public class WorkerProperties {
 
         public void setVirtualHost(String virtualHost) {
             this.virtualHost = virtualHost;
+        }
+    }
+
+    public static class AutoDeployProperties {
+
+        private boolean enabled = true;
+        private String resourceLocation = "classpath:bpmn/";
+        private boolean failOnError = true;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getResourceLocation() {
+            return resourceLocation;
+        }
+
+        public void setResourceLocation(String resourceLocation) {
+            this.resourceLocation = resourceLocation;
+        }
+
+        public boolean isFailOnError() {
+            return failOnError;
+        }
+
+        public void setFailOnError(boolean failOnError) {
+            this.failOnError = failOnError;
         }
     }
 }
