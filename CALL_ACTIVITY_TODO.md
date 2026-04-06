@@ -191,17 +191,17 @@
 
 ### 2.1. Исключения и модели
 
-- [ ] **2.1.1.** Создать `CallActivitySubprocessNotFoundException` (`core/.../domain/exception/CallActivitySubprocessNotFoundException.java`)
+- ✅ **2.1.1.** Создать `CallActivitySubprocessNotFoundException` (`core/.../domain/exception/CallActivitySubprocessNotFoundException.java`)
   - Поля: `calledElement`, `expectedFileName`, `parentProcessKey`
   - Сообщение: `Cannot deploy process '{parentProcessKey}': Call Activity references subprocess '{calledElement}' but file '{expectedFileName}' was not found in the deployment bundle`
 
-- [ ] **2.1.2.** Создать `DeploymentBundle` (`core/.../domain/model/DeploymentBundle.java`)
+- ✅ **2.1.2.** Создать `DeploymentBundle` (`core/.../domain/model/DeploymentBundle.java`)
   - Поле: `Map<String, String> bpmnFiles` (fileName → bpmnXml)
   - Методы: `getMainProcess()`, `getSubprocesses()`, `containsFile(String fileName)`
 
 ### 2.2. Валидация
 
-- [ ] **2.2.1.** Создать `CallActivityValidator` (`core/.../engine/CallActivityValidator.java`)
+- ✅ **2.2.1.** Создать `CallActivityValidator` (`core/.../engine/CallActivityValidator.java`)
   - Метод `extractCalledElements(ProcessDefinition)` — извлечь все `calledElement` из `CallActivity` узлов
   - Метод `validate(ProcessDefinition, DeploymentBundle)` — проверить наличие `{calledElement}.bpmn` в бандле
   - Рекурсивная валидация вложенных подпроцессов
@@ -209,30 +209,30 @@
 
 ### 2.3. Порт `ChildInstanceMapping`
 
-- [ ] **2.3.1.** Создать интерфейс `ChildInstanceMapping` (`core/.../port/outgoing/ChildInstanceMapping.java`)
+- ✅ **2.3.1.** Создать интерфейс `ChildInstanceMapping` (`core/.../port/outgoing/ChildInstanceMapping.java`)
   - `put(UUID childInstanceId, UUID parentInstanceId)`
   - `UUID getParent(UUID childInstanceId)`
   - `List<UUID> getChildren(UUID parentInstanceId)`
   - `void remove(UUID childInstanceId)`
 
-- [ ] **2.3.2.** Создать `InMemoryChildInstanceMapping` (`core/.../adapter/inmemory/InMemoryChildInstanceMapping.java`)
+- ✅ **2.3.2.** Создать `InMemoryChildInstanceMapping` (`core/.../adapter/inmemory/InMemoryChildInstanceMapping.java`)
 
 ### 2.4. Движок — Деплой
 
-- [ ] **2.4.1.** Добавить метод `deployBundle(DeploymentBundle)` в `ProcessEngine`
+- ✅ **2.4.1.** Добавить метод `deployBundle(DeploymentBundle)` в `ProcessEngine`
   - Парсить все BPMN-файлы из бандла через `BpmnParser`
   - Валидировать наличие подпроцессов через `CallActivityValidator`
   - Атомарный деплой всех `ProcessDefinition` в `ProcessDefinitionStore`
   - При ошибке деплоя любого определения — откат (undeploy) всех уже задеплоенных
   - Уведомить `DeploymentListener`-ы для каждого определения
 
-- [ ] **2.4.2.** Обновить `ProcessEngine.deploy()` — проверка наличия `CallActivity`
+- ✅ **2.4.2.** Обновить `ProcessEngine.deploy()` — проверка наличия `CallActivity`
   - Если BPMN содержит `CallActivity` элементы — выбросить ошибку с указанием использовать `deployBundle()`
   - Если не содержит — деплой как раньше
 
 ### 2.5. Движок — Автозапуск дочернего процесса
 
-- [ ] **2.5.1.** Доработать `ProcessEngine.advanceActiveTokens()` — автозапуск дочернего при `CallActivity`
+- ✅ **2.5.1.** Доработать `ProcessEngine.advanceActiveTokens()` — автозапуск дочернего при `CallActivity`
   - После `CallActivityStartedEvent` извлечь `calledElement` и `childProcessInstanceId`
   - Найти `ProcessDefinition` по ключу `calledElement` в `ProcessDefinitionStore`
   - Запустить дочерний процесс: создать `ProcessStartedEvent` с `parentProcessInstanceId`, создать токен, выполнить `StartEvent`
@@ -242,7 +242,7 @@
 
 ### 2.6. Движок — Автозавершение родителя
 
-- [ ] **2.6.1.** Доработать обработку `ProcessCompletedEvent` — автозавершение родителя
+- ✅ **2.6.1.** Доработать обработку `ProcessCompletedEvent` — автозавершение родителя
   - После `ProcessCompletedEvent` проверить `parentProcessInstanceId`
   - Если `parentProcessInstanceId != null` — автоматически вызвать `completeCallActivity(childInstanceId)`
   - Родительский токен на `CallActivity` переходит из `WAITING` → `ACTIVE`
@@ -250,80 +250,80 @@
 
 ### 2.7. Движок — Проброс ошибок
 
-- [ ] **2.7.1.** Реализовать проброс ошибок из дочернего в родительский процесс
+- ✅ **2.7.1.** Реализовать проброс ошибок из дочернего в родительский процесс
   - При `ProcessErrorEvent` в дочернем процессе — найти родительский через `ChildInstanceMapping`
   - Если на `CallActivity` есть `ErrorBoundaryEvent` — маршрутизировать через error boundary (аналогично `failTask`)
   - Если `ErrorBoundaryEvent` нет — вызвать ошибку родительского процесса + компенсацию
 
 ### 2.8. REST API
 
-- [ ] **2.8.1.** Создать эндпоинт `POST /api/v1/definitions/bundle` (`rest-api/.../controller/ProcessDefinitionController.java`)
+- ✅ **2.8.1.** Создать эндпоинт `POST /api/v1/definitions/bundle` (`rest-api/.../controller/ProcessDefinitionController.java`)
   - Принимает `MultipartFile[] files`
   - Создаёт `DeploymentBundle` из файлов
   - Вызывает `processEngine.deployBundle(bundle)`
   - Возвращает список `ProcessDefinitionDto` с HTTP 201
 
-- [ ] **2.8.2.** Обновить `POST /api/v1/definitions` — проверка на `CallActivity`
+- ✅ **2.8.2.** Обновить `POST /api/v1/definitions` — проверка на `CallActivity`
   - Если BPMN содержит `CallActivity` — вернуть HTTP 400 с указанием использовать `/bundle`
 
 ### 2.9. Redis-персистенция
 
-- [ ] **2.9.1.** Создать `RedisChildInstanceMapping` (`redis-persistence/.../RedisChildInstanceMapping.java`)
+- ✅ **2.9.1.** Создать `RedisChildInstanceMapping` (`redis-persistence/.../RedisChildInstanceMapping.java`)
   - Хранение `child→parent` и `parent→[children]` в Redis
   - Реализовать все методы интерфейса `ChildInstanceMapping`
 
 ### 2.10. Spring-интеграция
 
-- [ ] **2.10.1.** Зарегистрировать `ChildInstanceMapping` bean в `ProcessEngineAutoConfiguration`
+- ✅ **2.10.1.** Зарегистрировать `ChildInstanceMapping` bean в `ProcessEngineAutoConfiguration`
   - `InMemoryChildInstanceMapping` — fallback
   - `RedisChildInstanceMapping` — если Redis доступен
 
-- [ ] **2.10.2.** Обновить конструктор `ProcessEngine` — принять `ChildInstanceMapping`
+- ✅ **2.10.2.** Обновить конструктор `ProcessEngine` — принять `ChildInstanceMapping`
 
 ### 2.11. Unit-тесты Этапа 2
 
-- [ ] **2.11.1.** Тесты `CallActivityValidator`
+- ✅ **2.11.1.** Тесты `CallActivityValidator`
   - Все подпроцессы найдены в бандле → валидация успешна
   - Подпроцесс отсутствует → `CallActivitySubprocessNotFoundException`
   - Вложенные подпроцессы (A→B→C) — рекурсивная валидация
   - Циклические зависимости (A→B→A) — исключение
 
-- [ ] **2.11.2.** Тесты `DeploymentBundle`
+- ✅ **2.11.2.** Тесты `DeploymentBundle`
   - `containsFile()` — true/false
   - `getMainProcess()` / `getSubprocesses()`
 
-- [ ] **2.11.3.** Тесты `ProcessEngine.deployBundle()`
+- ✅ **2.11.3.** Тесты `ProcessEngine.deployBundle()`
   - Успешный деплой — все определения в `ProcessDefinitionStore`
   - Откат при ошибке — ни одно определение не задеплоено
 
-- [ ] **2.11.4.** Тест `ProcessEngine.deploy()` с `CallActivity` — ошибка
+- ✅ **2.11.4.** Тест `ProcessEngine.deploy()` с `CallActivity` — ошибка
 
-- [ ] **2.11.5.** Тесты `InMemoryChildInstanceMapping`
+- ✅ **2.11.5.** Тесты `InMemoryChildInstanceMapping`
   - `put` / `getParent` / `getChildren` / `remove`
 
 ### 2.12. E2E-тесты Этапа 2
 
-- [ ] **2.12.1.** E2E: полный цикл с реальными BPMN из `docs/processes/`
+- ✅ **2.12.1.** E2E: полный цикл с реальными BPMN из `docs/processes/`
   - Деплой бандла: `order-process.bpmn` + `charge-payment-subprocess.bpmn`
   - Старт `order-process` → validate-order → parallel(book + notify) → charge-payment (CallActivity)
   - Автозапуск `charge-payment-subprocess` → charge → gateway(success) → end
   - Автозавершение родителя → deliver-order → end
   - Проверить: оба процесса в `COMPLETED`, parent-child связь корректна
 
-- [ ] **2.12.2.** E2E: ошибка в дочернем с ErrorBoundaryEvent
+- ✅ **2.12.2.** E2E: ошибка в дочернем с ErrorBoundaryEvent
   - Дочерний процесс завершается ошибкой
   - Родительский маршрутизирует через error boundary
 
-- [ ] **2.12.3.** E2E: ошибка в дочернем без ErrorBoundaryEvent
+- ✅ **2.12.3.** E2E: ошибка в дочернем без ErrorBoundaryEvent
   - Дочерний процесс завершается ошибкой
   - Родительский запускает компенсацию (refund-payment)
 
-- [ ] **2.12.4.** E2E: вложенные Call Activity (A → B → C)
+- ✅ **2.12.4.** E2E: вложенные Call Activity (A → B → C)
   - Три уровня процессов
   - Корректная цепочка автозавершения C → B → A
 
-- [ ] **2.12.5.** E2E: retry loop в подпроцессе
+- ✅ **2.12.5.** E2E: retry loop в подпроцессе
   - charge → gateway(false) → check-status → gateway(false) → timer → charge → gateway(true) → end
   - Проверить: таймер, цикл, итоговое завершение
 
-- [ ] **2.12.6.** E2E: деплой бандла с отсутствующим подпроцессом → ошибка
+- ✅ **2.12.6.** E2E: деплой бандла с отсутствующим подпроцессом → ошибка

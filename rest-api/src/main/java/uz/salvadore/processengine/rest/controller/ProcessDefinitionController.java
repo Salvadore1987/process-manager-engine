@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import uz.salvadore.processengine.core.domain.model.DeploymentBundle;
 import uz.salvadore.processengine.core.domain.model.ProcessDefinition;
 import uz.salvadore.processengine.core.port.outgoing.ProcessDefinitionStore;
 import uz.salvadore.processengine.core.engine.ProcessEngine;
@@ -25,7 +26,9 @@ import uz.salvadore.processengine.rest.mapper.ProcessDefinitionDtoMapper;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/definitions")
@@ -61,6 +64,32 @@ public class ProcessDefinitionController {
         ProcessDefinition deployed = processEngine.deploy(definition);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toDto(deployed));
+    }
+
+    @PostMapping(path = "/bundle", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<List<ProcessDefinitionDto>> deployBundle(
+            @RequestParam("files") MultipartFile[] files) throws IOException {
+        Map<String, String> bpmnFiles = new LinkedHashMap<>();
+        for (MultipartFile file : files) {
+            String fileName = file.getOriginalFilename();
+            String bpmnXml = new String(file.getBytes(), StandardCharsets.UTF_8);
+
+            BpmnValidationResult validationResult = bpmnParser.validate(bpmnXml);
+            if (!validationResult.valid()) {
+                throw new ValidationFailedException(validationResult);
+            }
+
+            bpmnFiles.put(fileName, bpmnXml);
+        }
+
+        DeploymentBundle bundle = new DeploymentBundle(bpmnFiles);
+        List<ProcessDefinition> deployed = processEngine.deployBundle(bundle);
+
+        List<ProcessDefinitionDto> dtos = deployed.stream()
+                .map(mapper::toDto)
+                .toList();
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(dtos);
     }
 
     @PostMapping(path = "/validate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

@@ -4,6 +4,7 @@ import uz.salvadore.processengine.core.domain.enums.NodeType;
 import uz.salvadore.processengine.core.domain.enums.ProcessState;
 import uz.salvadore.processengine.core.domain.enums.TokenState;
 import uz.salvadore.processengine.core.domain.event.CallActivityCompletedEvent;
+import uz.salvadore.processengine.core.domain.event.CallActivityStartedEvent;
 import uz.salvadore.processengine.core.domain.event.CompensationTriggeredEvent;
 import uz.salvadore.processengine.core.domain.event.ProcessErrorEvent;
 import uz.salvadore.processengine.core.domain.event.ProcessEvent;
@@ -17,6 +18,7 @@ import uz.salvadore.processengine.core.domain.event.TimerFiredEvent;
 import uz.salvadore.processengine.core.domain.event.TokenWaitingEvent;
 import uz.salvadore.processengine.core.domain.model.CallActivity;
 import uz.salvadore.processengine.core.domain.model.CompensationBoundaryEvent;
+import uz.salvadore.processengine.core.domain.model.DeploymentBundle;
 import uz.salvadore.processengine.core.domain.model.ErrorBoundaryEvent;
 import uz.salvadore.processengine.core.domain.model.FlowNode;
 import uz.salvadore.processengine.core.domain.model.ProcessDefinition;
@@ -28,7 +30,9 @@ import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.context.ExecutionContext;
 import uz.salvadore.processengine.core.engine.eventsourcing.EventApplier;
 import uz.salvadore.processengine.core.engine.eventsourcing.ProcessInstanceProjection;
+import uz.salvadore.processengine.core.parser.BpmnParser;
 import uz.salvadore.processengine.core.port.outgoing.ActivityLog;
+import uz.salvadore.processengine.core.port.outgoing.ChildInstanceMapping;
 import uz.salvadore.processengine.core.port.outgoing.DeploymentListener;
 import uz.salvadore.processengine.core.port.outgoing.InstanceDefinitionMapping;
 import uz.salvadore.processengine.core.port.outgoing.ProcessDefinitionStore;
@@ -56,11 +60,13 @@ public final class ProcessEngine {
     private final TokenExecutor tokenExecutor;
     private final SequenceGenerator sequenceGenerator;
     private final InstanceDefinitionMapping instanceDefinitionMapping;
+    private final ChildInstanceMapping childInstanceMapping;
     private final ProcessInstanceLock processInstanceLock;
     private final ActivityLog activityLog;
     private final EventApplier eventApplier;
     private final ProcessInstanceProjection projection;
     private final List<DeploymentListener> deploymentListeners;
+    private final BpmnParser bpmnParser;
 
     public ProcessEngine(ProcessEventStore eventStore,
                          ProcessDefinitionStore definitionStore,
@@ -70,7 +76,7 @@ public final class ProcessEngine {
                          ProcessInstanceLock processInstanceLock,
                          ActivityLog activityLog) {
         this(eventStore, definitionStore, tokenExecutor, sequenceGenerator,
-                instanceDefinitionMapping, processInstanceLock, activityLog, List.of());
+                instanceDefinitionMapping, null, processInstanceLock, activityLog, List.of());
     }
 
     public ProcessEngine(ProcessEventStore eventStore,
@@ -81,24 +87,80 @@ public final class ProcessEngine {
                          ProcessInstanceLock processInstanceLock,
                          ActivityLog activityLog,
                          List<DeploymentListener> deploymentListeners) {
+        this(eventStore, definitionStore, tokenExecutor, sequenceGenerator,
+                instanceDefinitionMapping, null, processInstanceLock, activityLog, deploymentListeners);
+    }
+
+    public ProcessEngine(ProcessEventStore eventStore,
+                         ProcessDefinitionStore definitionStore,
+                         TokenExecutor tokenExecutor,
+                         SequenceGenerator sequenceGenerator,
+                         InstanceDefinitionMapping instanceDefinitionMapping,
+                         ChildInstanceMapping childInstanceMapping,
+                         ProcessInstanceLock processInstanceLock,
+                         ActivityLog activityLog,
+                         List<DeploymentListener> deploymentListeners) {
         this.eventStore = eventStore;
         this.definitionStore = definitionStore;
         this.tokenExecutor = tokenExecutor;
         this.sequenceGenerator = sequenceGenerator;
         this.instanceDefinitionMapping = instanceDefinitionMapping;
+        this.childInstanceMapping = childInstanceMapping;
         this.processInstanceLock = processInstanceLock;
         this.activityLog = activityLog;
         this.eventApplier = new EventApplier();
         this.projection = new ProcessInstanceProjection(eventApplier);
         this.deploymentListeners = deploymentListeners;
+        this.bpmnParser = new BpmnParser();
     }
 
     public ProcessDefinition deploy(ProcessDefinition definition) {
+        boolean hasCallActivity = definition.getFlowNodes().stream()
+                .anyMatch(CallActivity.class::isInstance);
+        if (hasCallActivity) {
+            throw new IllegalArgumentException(
+                    "Process definition '" + definition.getKey()
+                            + "' contains Call Activity elements. Use deployBundle() instead.");
+        }
         ProcessDefinition deployed = definitionStore.deploy(definition);
         for (DeploymentListener listener : deploymentListeners) {
             listener.onDeploy(deployed);
         }
         return deployed;
+    }
+
+    public List<ProcessDefinition> deployBundle(DeploymentBundle bundle) {
+        CallActivityValidator validator = new CallActivityValidator(bpmnParser);
+
+        Map<String, ProcessDefinition> parsedDefinitions = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : bundle.getBpmnFiles().entrySet()) {
+            List<ProcessDefinition> definitions = bpmnParser.parse(entry.getValue());
+            ProcessDefinition definition = definitions.getFirst();
+            parsedDefinitions.put(entry.getKey(), definition);
+        }
+
+        ProcessDefinition mainDefinition = parsedDefinitions.values().iterator().next();
+        validator.validate(mainDefinition, bundle);
+
+        List<ProcessDefinition> deployedDefinitions = new ArrayList<>();
+        try {
+            for (ProcessDefinition definition : parsedDefinitions.values()) {
+                ProcessDefinition deployed = definitionStore.deploy(definition);
+                deployedDefinitions.add(deployed);
+            }
+            for (ProcessDefinition deployed : deployedDefinitions) {
+                for (DeploymentListener listener : deploymentListeners) {
+                    listener.onDeploy(deployed);
+                }
+            }
+        } catch (Exception e) {
+            for (ProcessDefinition deployed : deployedDefinitions) {
+                definitionStore.undeploy(deployed.getKey());
+            }
+            throw e;
+        }
+
+        return deployedDefinitions;
     }
 
     public ProcessInstance startProcess(String definitionKey, Map<String, Object> variables) {
@@ -286,6 +348,11 @@ public final class ProcessEngine {
         }
 
         eventStore.appendAll(allEvents);
+
+        if (instance.getState() == ProcessState.ERROR) {
+            propagateChildError(processInstanceId, errorCode, errorMessage);
+        }
+
         return instance;
     }
 
@@ -517,6 +584,9 @@ public final class ProcessEngine {
                         allEvents.addAll(events);
                         for (ProcessEvent event : events) {
                             instance = eventApplier.apply(event, instance);
+                            if (event instanceof CallActivityStartedEvent caEvent) {
+                                autoStartChildProcess(caEvent, instance);
+                            }
                         }
                     } else {
                         TokenWaitingEvent waitingEvent = new TokenWaitingEvent(
@@ -543,6 +613,11 @@ public final class ProcessEngine {
                         instance = eventApplier.apply(event, instance);
                         if (event instanceof ProcessCompletedEvent completedEvt) {
                             activityLog.processCompleted(completedEvt.processInstanceId(), completedEvt.occurredAt());
+                            autoCompleteParent(completedEvt.processInstanceId());
+                        }
+                        if (event instanceof ProcessErrorEvent errorEvt) {
+                            propagateChildError(errorEvt.processInstanceId(),
+                                    errorEvt.errorCode(), errorEvt.errorMessage());
                         }
                     }
                     advanced = true;
@@ -551,6 +626,206 @@ public final class ProcessEngine {
             }
         }
         return instance;
+    }
+
+    private void autoStartChildProcess(CallActivityStartedEvent event, ProcessInstance parentInstance) {
+        if (childInstanceMapping == null) {
+            return;
+        }
+
+        String calledElement = event.calledElement();
+        ProcessDefinition childDefinition = definitionStore.getByKey(calledElement)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Subprocess definition not found: " + calledElement));
+
+        UUID childProcessInstanceId = event.childProcessInstanceId();
+        Map<String, Object> childVariables = new HashMap<>(parentInstance.getVariables());
+
+        ProcessStartedEvent childStartedEvent = new ProcessStartedEvent(
+                UUIDv7.generate(),
+                childProcessInstanceId,
+                childDefinition.getId(),
+                parentInstance.getId(),
+                childVariables,
+                Instant.now(),
+                sequenceGenerator.next(childProcessInstanceId)
+        );
+
+        List<ProcessEvent> childEvents = new ArrayList<>();
+        childEvents.add(childStartedEvent);
+
+        ProcessInstance childInstance = eventApplier.apply(childStartedEvent, null);
+        instanceDefinitionMapping.put(childProcessInstanceId, childDefinition.getId());
+        childInstanceMapping.put(childProcessInstanceId, parentInstance.getId());
+
+        Token startToken = childInstance.getTokens().getFirst();
+        FlowNode startNode = findStartEvent(childDefinition);
+
+        ExecutionContext childContext = new ExecutionContext(childInstance, childDefinition);
+        List<ProcessEvent> executionEvents = tokenExecutor.execute(startToken, startNode, childContext);
+        childEvents.addAll(executionEvents);
+
+        for (ProcessEvent childEvent : executionEvents) {
+            childInstance = eventApplier.apply(childEvent, childInstance);
+        }
+
+        childInstance = advanceActiveTokens(childInstance, childDefinition, childEvents);
+
+        eventStore.appendAll(childEvents);
+    }
+
+    private void autoCompleteParent(UUID childProcessInstanceId) {
+        if (childInstanceMapping == null) {
+            return;
+        }
+
+        UUID parentInstanceId = childInstanceMapping.getParent(childProcessInstanceId);
+        if (parentInstanceId == null) {
+            return;
+        }
+
+        ProcessInstance childInstance = getProcessInstance(childProcessInstanceId);
+        Map<String, Object> childVariables = childInstance.getVariables();
+
+        processInstanceLock.lock(parentInstanceId);
+        try {
+            ProcessDefinition parentDefinition = getDefinitionForInstance(parentInstanceId);
+            ProcessInstance parentInstance = getProcessInstance(parentInstanceId);
+
+            for (Token token : parentInstance.getTokens()) {
+                if (token.getState() == TokenState.WAITING) {
+                    FlowNode node = findNodeById(parentDefinition, token.getCurrentNodeId());
+                    if (node.type() == NodeType.CALL_ACTIVITY) {
+                        List<ProcessEvent> allEvents = new ArrayList<>();
+
+                        CallActivityCompletedEvent completedEvent = new CallActivityCompletedEvent(
+                                UUIDv7.generate(),
+                                parentInstanceId,
+                                token.getId(),
+                                token.getCurrentNodeId(),
+                                childProcessInstanceId,
+                                Instant.now(),
+                                sequenceGenerator.next(parentInstanceId)
+                        );
+                        allEvents.add(completedEvent);
+                        parentInstance = eventApplier.apply(completedEvent, parentInstance);
+
+                        Map<String, Object> mergedVariables = new HashMap<>(parentInstance.getVariables());
+                        mergedVariables.putAll(childVariables);
+                        parentInstance = parentInstance.withVariables(mergedVariables);
+
+                        List<SequenceFlow> outgoingFlows = parentDefinition.getSequenceFlows().stream()
+                                .filter(f -> f.sourceRef().equals(node.id()))
+                                .toList();
+
+                        if (!outgoingFlows.isEmpty()) {
+                            TokenMovedEvent movedEvent = new TokenMovedEvent(
+                                    UUIDv7.generate(),
+                                    parentInstanceId,
+                                    token.getId(),
+                                    node.id(),
+                                    outgoingFlows.getFirst().targetRef(),
+                                    Instant.now(),
+                                    sequenceGenerator.next(parentInstanceId)
+                            );
+                            allEvents.add(movedEvent);
+                            parentInstance = eventApplier.apply(movedEvent, parentInstance);
+                        }
+
+                        parentInstance = advanceActiveTokens(parentInstance, parentDefinition, allEvents);
+                        eventStore.appendAll(allEvents);
+                        return;
+                    }
+                }
+            }
+        } finally {
+            processInstanceLock.unlock(parentInstanceId);
+        }
+    }
+
+    public void propagateChildError(UUID childProcessInstanceId, String errorCode, String errorMessage) {
+        if (childInstanceMapping == null) {
+            return;
+        }
+
+        UUID parentInstanceId = childInstanceMapping.getParent(childProcessInstanceId);
+        if (parentInstanceId == null) {
+            return;
+        }
+
+        processInstanceLock.lock(parentInstanceId);
+        try {
+            ProcessDefinition parentDefinition = getDefinitionForInstance(parentInstanceId);
+            ProcessInstance parentInstance = getProcessInstance(parentInstanceId);
+
+            for (Token token : parentInstance.getTokens()) {
+                if (token.getState() == TokenState.WAITING) {
+                    FlowNode node = findNodeById(parentDefinition, token.getCurrentNodeId());
+                    if (node.type() == NodeType.CALL_ACTIVITY) {
+                        ErrorBoundaryEvent errorBoundary = findErrorBoundary(
+                                parentDefinition, node.id(), errorCode);
+
+                        List<ProcessEvent> allEvents = new ArrayList<>();
+
+                        if (errorBoundary != null) {
+                            TokenMovedEvent movedEvent = new TokenMovedEvent(
+                                    UUIDv7.generate(),
+                                    parentInstanceId,
+                                    token.getId(),
+                                    node.id(),
+                                    errorBoundary.id(),
+                                    Instant.now(),
+                                    sequenceGenerator.next(parentInstanceId)
+                            );
+                            allEvents.add(movedEvent);
+                            parentInstance = eventApplier.apply(movedEvent, parentInstance);
+
+                            ExecutionContext context = new ExecutionContext(parentInstance, parentDefinition);
+                            List<ProcessEvent> boundaryEvents = tokenExecutor.execute(
+                                    Token.restore(token.getId(), errorBoundary.id(), TokenState.ACTIVE),
+                                    errorBoundary, context);
+                            allEvents.addAll(boundaryEvents);
+                            for (ProcessEvent event : boundaryEvents) {
+                                parentInstance = eventApplier.apply(event, parentInstance);
+                            }
+
+                            parentInstance = advanceActiveTokens(parentInstance, parentDefinition, allEvents);
+                        } else {
+                            TaskCompletedEvent failedTokenCompleted = new TaskCompletedEvent(
+                                    UUIDv7.generate(),
+                                    parentInstanceId,
+                                    token.getId(),
+                                    node.id(),
+                                    null,
+                                    Instant.now(),
+                                    sequenceGenerator.next(parentInstanceId)
+                            );
+                            allEvents.add(failedTokenCompleted);
+                            parentInstance = eventApplier.apply(failedTokenCompleted, parentInstance);
+
+                            parentInstance = triggerCompensation(parentInstance, parentDefinition, allEvents);
+
+                            ProcessErrorEvent processError = new ProcessErrorEvent(
+                                    UUIDv7.generate(),
+                                    parentInstanceId,
+                                    errorCode,
+                                    errorMessage,
+                                    Instant.now(),
+                                    sequenceGenerator.next(parentInstanceId)
+                            );
+                            allEvents.add(processError);
+                            parentInstance = eventApplier.apply(processError, parentInstance);
+                            activityLog.processErrored(parentInstanceId, errorCode, errorMessage, Instant.now());
+                        }
+
+                        eventStore.appendAll(allEvents);
+                        return;
+                    }
+                }
+            }
+        } finally {
+            processInstanceLock.unlock(parentInstanceId);
+        }
     }
 
     private ErrorBoundaryEvent findErrorBoundary(ProcessDefinition definition,
