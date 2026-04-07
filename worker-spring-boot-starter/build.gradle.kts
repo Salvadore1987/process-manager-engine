@@ -12,7 +12,6 @@ publishing {
 }
 
 dependencies {
-    implementation(project(":spring-integration"))
     implementation(libs.rabbitmq.client)
     implementation(libs.jackson.databind)
     implementation(libs.jackson.datatype.jsr310)

@@ -149,6 +149,7 @@ implementation("uz.salvadore:worker-spring-boot-starter:1.0-SNAPSHOT")
 ```yaml
 process-engine:
   worker:
+    engine-url: http://localhost:8080        # URL движка (обязателен для auto-deploy)
     rabbitmq:
       host: localhost
       port: 5672
@@ -156,9 +157,14 @@ process-engine:
       password: guest
       virtual-host: /
     auto-deploy:
-      enabled: true                        # автодеплой BPMN при старте (default: true)
-      resource-location: classpath:bpmn/   # каталог с BPMN-файлами (default: classpath:bpmn/)
-      fail-on-error: true                  # ��становить приложение при ошибке деплоя (default: true)
+      enabled: true                          # автодеплой BPMN при старте (default: true)
+      resource-location: classpath:bpmn/     # каталог с BPMN-файлами (default: classpath:bpmn/)
+      fail-on-error: true                    # остановить приложение при ошибке деплоя (default: true)
+    auth:                                    # опционально: если включена авторизация
+      enabled: false
+      token-uri: http://localhost:8180/realms/process-engine/protocol/openid-connect/token
+      client-id: process-engine-service
+      client-secret: process-engine-service-secret
 ```
 
 **3. Разместить BPMN-файлы в ресурсах:**
@@ -169,8 +175,9 @@ src/main/resources/bpmn/
 └── charge-payment-subprocess.bpmn        # subprocess (CallActivity)
 ```
 
-При ��тарте приложения все `.bpmn` файлы из каталога автоматически деплоятся. Процессы с `CallActivity` автоматически группируются в bundle с подпроцессами.
+При старте приложения все `.bpmn` файлы из каталога автоматически деплоятся в движок через REST API.
 
+**4. Реализовать обработчик:**
 **4. Реализовать о��работчик:**
 
 ```java
@@ -196,7 +203,7 @@ public class OrderValidationHandler implements ExternalTaskHandler {
 ```
 
 Starter автоматически:
-- **Деплоит BPMN-процессы** из `classpath:bpmn/` при старте (автодеплой, включая CallActivity подпроцессы)
+- **Деплоит BPMN-процессы** из `classpath:bpmn/` при старте через REST API движка (автодеплой)
 - Подключается к RabbitMQ с `basicQos(1)` для защиты от дублирования сообщений
 - Слушает общую очередь `task.execute`
 - Определяет topic задачи по заголовку `x-task-topic` и направляет к нужному handler
@@ -368,6 +375,25 @@ channel.basic_consume(
     on_message_callback=on_message)
 channel.start_consuming()
 ```
+
+### Деплой BPMN для не-Java сервисов
+
+Для сервисов, написанных не на Java/Spring, BPMN-файлы нужно задеплоить вручную через REST API:
+
+```bash
+# Один файл (без CallActivity)
+curl -X POST http://localhost:8080/api/v1/definitions \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@order-process.bpmn"
+
+# Bundle (main process + подпроцессы CallActivity)
+curl -X POST http://localhost:8080/api/v1/definitions/bundle \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "files=@order-process.bpmn" \
+  -F "files=@charge-payment-subprocess.bpmn"
+```
+
+> **Важно:** при деплое bundle первый файл считается основным процессом. Сервер автоматически валидирует все `calledElement` ссылки CallActivity.
 
 ---
 

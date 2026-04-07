@@ -12,18 +12,19 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.ResourcePatternResolver;
-import uz.salvadore.processengine.core.domain.model.DeploymentBundle;
-import uz.salvadore.processengine.core.domain.model.ProcessDefinition;
-import uz.salvadore.processengine.core.engine.ProcessEngine;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -33,23 +34,27 @@ import static org.mockito.Mockito.when;
 /**
  * Unit tests for {@link BpmnAutoDeployer}.
  *
- * <p>Strategy: BpmnAutoDeployer creates a real BpmnParser internally, so we use real BPMN XML
- * content from test resources. ProcessEngine and ResourcePatternResolver are mocked.
+ * <p>Strategy: BpmnAutoDeployer delegates to ProcessEngineClient (HTTP-based) for deployments.
+ * ProcessEngineClient and ResourcePatternResolver are mocked. Real BPMN content from test
+ * resources is used to keep the scanning realistic.
  */
 @ExtendWith(MockitoExtension.class)
 class BpmnAutoDeployerTest {
 
     @Mock
-    private ProcessEngine processEngine;
+    private ProcessEngineClient engineClient;
 
     @Mock
     private ResourcePatternResolver resourcePatternResolver;
 
     @Captor
-    private ArgumentCaptor<ProcessDefinition> definitionCaptor;
+    private ArgumentCaptor<String> filenameCaptor;
 
     @Captor
-    private ArgumentCaptor<DeploymentBundle> bundleCaptor;
+    private ArgumentCaptor<byte[]> contentCaptor;
+
+    @Captor
+    private ArgumentCaptor<Map<String, byte[]>> bundleCaptor;
 
     private WorkerProperties properties;
     private BpmnAutoDeployer deployer;
@@ -57,7 +62,7 @@ class BpmnAutoDeployerTest {
     @BeforeEach
     void setUp() {
         properties = new WorkerProperties();
-        deployer = new BpmnAutoDeployer(processEngine, properties, resourcePatternResolver);
+        deployer = new BpmnAutoDeployer(engineClient, properties, resourcePatternResolver);
     }
 
     // ---- Helper methods ----
@@ -67,13 +72,11 @@ class BpmnAutoDeployerTest {
         try {
             ClassPathResource classPathResource = new ClassPathResource(classpathLocation);
             InputStream inputStream = classPathResource.getInputStream();
-            String content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            byte[] content = inputStream.readAllBytes();
             inputStream.close();
 
             when(resource.getFilename()).thenReturn(filename);
-            when(resource.getInputStream()).thenReturn(
-                    new java.io.ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8))
-            );
+            when(resource.getInputStream()).thenReturn(new ByteArrayInputStream(content));
         } catch (IOException e) {
             throw new RuntimeException("Failed to load test resource: " + classpathLocation, e);
         }
@@ -106,7 +109,7 @@ class BpmnAutoDeployerTest {
         @DisplayName("isRunning is false before start, true after start, false after stop")
         void isRunning_reflectsLifecycleState() throws IOException {
             // Arrange
-            configureResources(); // no files
+            configureResources();
 
             // Assert — before start
             assertThat(deployer.isRunning()).isFalse();
@@ -134,10 +137,10 @@ class BpmnAutoDeployerTest {
             // Act
             deployer.start();
 
-            // Assert
-            verify(processEngine, never()).deploy(any());
-            verify(processEngine, never()).deployBundle(any());
-            assertThat(deployer.isRunning()).isFalse();
+            // Assert — no interaction with the engine client at all
+            verify(engineClient, never()).deployDefinition(anyString(), any(byte[].class));
+            verify(engineClient, never()).deployBundle(anyMap());
+            assertThat(deployer.isRunning()).isTrue();
         }
     }
 
@@ -149,25 +152,25 @@ class BpmnAutoDeployerTest {
         @DisplayName("start logs info and does not deploy anything")
         void start_noDeploys_whenNoBpmnFilesFound() throws IOException {
             // Arrange
-            configureResources(); // empty array
+            configureResources();
 
             // Act
             deployer.start();
 
             // Assert
-            verify(processEngine, never()).deploy(any());
-            verify(processEngine, never()).deployBundle(any());
+            verify(engineClient, never()).deployDefinition(anyString(), any(byte[].class));
+            verify(engineClient, never()).deployBundle(anyMap());
             assertThat(deployer.isRunning()).isTrue();
         }
     }
 
     @Nested
-    @DisplayName("Standalone BPMN deployment (no CallActivity)")
-    class StandaloneDeploymentTests {
+    @DisplayName("Single file deployment")
+    class SingleFileDeploymentTests {
 
         @Test
-        @DisplayName("deploys a single standalone process via processEngine.deploy()")
-        void start_deploysStandaloneProcess() throws IOException {
+        @DisplayName("deploys a single BPMN file via deployDefinition()")
+        void start_deploysSingleFile_viaDeployDefinition() throws IOException {
             // Arrange
             Resource simpleResource = resourceFromClasspath("bpmn/simple-process.bpmn", "simple-process.bpmn");
             configureResources(simpleResource);
@@ -175,38 +178,22 @@ class BpmnAutoDeployerTest {
             // Act
             deployer.start();
 
-            // Assert
-            verify(processEngine).deploy(definitionCaptor.capture());
-            verify(processEngine, never()).deployBundle(any());
+            // Assert — single file goes through deployDefinition, not deployBundle
+            verify(engineClient).deployDefinition(filenameCaptor.capture(), contentCaptor.capture());
+            verify(engineClient, never()).deployBundle(anyMap());
 
-            ProcessDefinition deployed = definitionCaptor.getValue();
-            assertThat(deployed.getKey()).isEqualTo("simple-process");
-        }
-
-        @Test
-        @DisplayName("deploys multiple standalone processes when none have CallActivity")
-        void start_deploysMultipleStandaloneProcesses() throws IOException {
-            // Arrange
-            Resource simpleResource = resourceFromClasspath("bpmn/simple-process.bpmn", "simple-process.bpmn");
-            Resource subResource = resourceFromClasspath("bpmn/sub-process.bpmn", "sub-process.bpmn");
-            configureResources(simpleResource, subResource);
-
-            // Act
-            deployer.start();
-
-            // Assert — both deployed as standalone since neither references the other
-            verify(processEngine, org.mockito.Mockito.times(2)).deploy(any());
-            verify(processEngine, never()).deployBundle(any());
+            assertThat(filenameCaptor.getValue()).isEqualTo("simple-process.bpmn");
+            assertThat(contentCaptor.getValue()).isNotEmpty();
         }
     }
 
     @Nested
-    @DisplayName("Bundle deployment (with CallActivity)")
+    @DisplayName("Bundle deployment (multiple files)")
     class BundleDeploymentTests {
 
         @Test
-        @DisplayName("deploys main process with CallActivity as a bundle including subprocess")
-        void start_deploysBundleForCallActivity() throws IOException {
+        @DisplayName("deploys multiple BPMN files via deployBundle()")
+        void start_deploysBundle_whenMultipleFilesFound() throws IOException {
             // Arrange
             Resource mainResource = resourceFromClasspath(
                     "bpmn/main-with-call-activity.bpmn", "main-with-call-activity.bpmn");
@@ -217,42 +204,19 @@ class BpmnAutoDeployerTest {
             // Act
             deployer.start();
 
-            // Assert — bundle deployed, no standalone deploy calls
-            verify(processEngine).deployBundle(bundleCaptor.capture());
-            verify(processEngine, never()).deploy(any());
+            // Assert — multiple files go through deployBundle, not deployDefinition
+            verify(engineClient).deployBundle(bundleCaptor.capture());
+            verify(engineClient, never()).deployDefinition(anyString(), any(byte[].class));
 
-            DeploymentBundle bundle = bundleCaptor.getValue();
-            assertThat(bundle.getMainProcess()).isEqualTo("main-with-call-activity.bpmn");
-            assertThat(bundle.getBpmnFiles()).containsKeys("main-with-call-activity.bpmn", "sub-process.bpmn");
+            Map<String, byte[]> bundle = bundleCaptor.getValue();
+            assertThat(bundle).hasSize(2);
+            assertThat(bundle).containsKeys("main-with-call-activity.bpmn", "sub-process.bpmn");
         }
 
         @Test
-        @DisplayName("subprocess is NOT deployed standalone — only as part of bundle")
-        void start_subprocessNotDeployedStandalone() throws IOException {
+        @DisplayName("deploys three BPMN files as a single bundle")
+        void start_deploysThreeFilesAsBundle() throws IOException {
             // Arrange
-            Resource mainResource = resourceFromClasspath(
-                    "bpmn/main-with-call-activity.bpmn", "main-with-call-activity.bpmn");
-            Resource subResource = resourceFromClasspath(
-                    "bpmn/sub-process.bpmn", "sub-process.bpmn");
-            configureResources(mainResource, subResource);
-
-            // Act
-            deployer.start();
-
-            // Assert — only one bundle deploy, subprocess file is not deployed on its own
-            verify(processEngine).deployBundle(bundleCaptor.capture());
-            verify(processEngine, never()).deploy(any());
-
-            DeploymentBundle bundle = bundleCaptor.getValue();
-            // main is first entry, sub-process is second
-            assertThat(bundle.getBpmnFiles().keySet().stream().toList())
-                    .containsExactly("main-with-call-activity.bpmn", "sub-process.bpmn");
-        }
-
-        @Test
-        @DisplayName("standalone process is deployed separately alongside a bundle")
-        void start_deploysBundleAndStandaloneSeparately() throws IOException {
-            // Arrange — three files: standalone + main-with-call + subprocess
             Resource simpleResource = resourceFromClasspath(
                     "bpmn/simple-process.bpmn", "simple-process.bpmn");
             Resource mainResource = resourceFromClasspath(
@@ -265,13 +229,13 @@ class BpmnAutoDeployerTest {
             deployer.start();
 
             // Assert
-            verify(processEngine).deploy(definitionCaptor.capture());
-            verify(processEngine).deployBundle(bundleCaptor.capture());
+            verify(engineClient).deployBundle(bundleCaptor.capture());
+            verify(engineClient, never()).deployDefinition(anyString(), any(byte[].class));
 
-            // standalone is the simple-process
-            assertThat(definitionCaptor.getValue().getKey()).isEqualTo("simple-process");
-            // bundle contains main + subprocess
-            assertThat(bundleCaptor.getValue().getBpmnFiles()).hasSize(2);
+            Map<String, byte[]> bundle = bundleCaptor.getValue();
+            assertThat(bundle).hasSize(3);
+            assertThat(bundle).containsKeys(
+                    "simple-process.bpmn", "main-with-call-activity.bpmn", "sub-process.bpmn");
         }
     }
 
@@ -280,33 +244,35 @@ class BpmnAutoDeployerTest {
     class ErrorHandlingTests {
 
         @Test
-        @DisplayName("failOnError=true throws IllegalStateException on deploy failure")
-        void start_throwsIllegalStateException_whenFailOnErrorTrue() throws IOException {
+        @DisplayName("failOnError=true throws IllegalStateException on single deploy failure")
+        void start_throwsIllegalStateException_whenDeployDefinitionFails() throws IOException {
             // Arrange
             properties.getAutoDeploy().setFailOnError(true);
 
             Resource simpleResource = resourceFromClasspath("bpmn/simple-process.bpmn", "simple-process.bpmn");
             configureResources(simpleResource);
 
-            when(processEngine.deploy(any())).thenThrow(new RuntimeException("deploy failed"));
+            doThrow(new ProcessEngineClient.DeploymentException("deploy failed"))
+                    .when(engineClient).deployDefinition(anyString(), any(byte[].class));
 
             // Act & Assert
             assertThatThrownBy(() -> deployer.start())
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("Failed to deploy process")
-                    .hasCauseInstanceOf(RuntimeException.class);
+                    .hasMessageContaining("Failed to deploy BPMN files to engine")
+                    .hasCauseInstanceOf(ProcessEngineClient.DeploymentException.class);
         }
 
         @Test
-        @DisplayName("failOnError=false logs error and continues on deploy failure")
-        void start_logsAndContinues_whenFailOnErrorFalse() throws IOException {
+        @DisplayName("failOnError=false logs error and continues on single deploy failure")
+        void start_logsAndContinues_whenDeployDefinitionFails_andFailOnErrorFalse() throws IOException {
             // Arrange
             properties.getAutoDeploy().setFailOnError(false);
 
             Resource simpleResource = resourceFromClasspath("bpmn/simple-process.bpmn", "simple-process.bpmn");
             configureResources(simpleResource);
 
-            when(processEngine.deploy(any())).thenThrow(new RuntimeException("deploy failed"));
+            doThrow(new ProcessEngineClient.DeploymentException("deploy failed"))
+                    .when(engineClient).deployDefinition(anyString(), any(byte[].class));
 
             // Act — should NOT throw
             deployer.start();
@@ -327,12 +293,13 @@ class BpmnAutoDeployerTest {
                     "bpmn/sub-process.bpmn", "sub-process.bpmn");
             configureResources(mainResource, subResource);
 
-            when(processEngine.deployBundle(any())).thenThrow(new RuntimeException("bundle deploy failed"));
+            doThrow(new ProcessEngineClient.DeploymentException("bundle deploy failed"))
+                    .when(engineClient).deployBundle(anyMap());
 
             // Act & Assert
             assertThatThrownBy(() -> deployer.start())
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("Failed to deploy bundle");
+                    .hasMessageContaining("Failed to deploy BPMN files to engine");
         }
 
         @Test
@@ -372,7 +339,7 @@ class BpmnAutoDeployerTest {
         void start_normalizesResourceLocationWithoutTrailingSlash() throws IOException {
             // Arrange
             properties.getAutoDeploy().setResourceLocation("classpath:custom");
-            configureResources(); // no files
+            configureResources();
 
             // Act
             deployer.start();
@@ -386,7 +353,7 @@ class BpmnAutoDeployerTest {
         void start_preservesTrailingSlash() throws IOException {
             // Arrange
             properties.getAutoDeploy().setResourceLocation("classpath:bpmn/");
-            configureResources(); // no files
+            configureResources();
 
             // Act
             deployer.start();
@@ -413,8 +380,8 @@ class BpmnAutoDeployerTest {
             deployer.start();
 
             // Assert — no deployments since the only resource was skipped
-            verify(processEngine, never()).deploy(any());
-            verify(processEngine, never()).deployBundle(any());
+            verify(engineClient, never()).deployDefinition(anyString(), any(byte[].class));
+            verify(engineClient, never()).deployBundle(anyMap());
         }
     }
 }
