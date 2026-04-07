@@ -391,6 +391,105 @@ class SimpleConditionEvaluatorTest {
     }
 
     @Nested
+    @DisplayName("Boolean expressions")
+    class BooleanExpressionTests {
+
+        @Test
+        void shouldReturnTrueForTrueBooleanVariable() {
+            // Arrange
+            Map<String, Object> variables = Map.of("isPaymentSuccess", true);
+
+            // Act
+            boolean result = evaluator.evaluate("${isPaymentSuccess}", variables);
+
+            // Assert
+            assertThat(result).isTrue();
+        }
+
+        @Test
+        void shouldReturnFalseForFalseBooleanVariable() {
+            // Arrange
+            Map<String, Object> variables = Map.of("isPaymentSuccess", false);
+
+            // Act
+            boolean result = evaluator.evaluate("${isPaymentSuccess}", variables);
+
+            // Assert
+            assertThat(result).isFalse();
+        }
+
+        @Test
+        void shouldNegateWhenExclamationMarkUsedWithTrueValue() {
+            // Arrange
+            Map<String, Object> variables = Map.of("isPaymentSuccess", true);
+
+            // Act
+            boolean result = evaluator.evaluate("${!isPaymentSuccess}", variables);
+
+            // Assert
+            assertThat(result).isFalse();
+        }
+
+        @Test
+        void shouldNegateWhenExclamationMarkUsedWithFalseValue() {
+            // Arrange
+            Map<String, Object> variables = Map.of("isPaymentSuccess", false);
+
+            // Act
+            boolean result = evaluator.evaluate("${!isPaymentSuccess}", variables);
+
+            // Assert
+            assertThat(result).isTrue();
+        }
+
+        @Test
+        void shouldThrowWhenBooleanVariableNotFound() {
+            // Arrange
+            Map<String, Object> variables = Map.of("other", true);
+
+            // Act & Assert
+            assertThatThrownBy(() -> evaluator.evaluate("${nonExistent}", variables))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("not found");
+        }
+
+        @Test
+        void shouldThrowWhenVariableIsNotBoolean() {
+            // Arrange
+            Map<String, Object> variables = Map.of("stringVar", "hello");
+
+            // Act & Assert
+            assertThatThrownBy(() -> evaluator.evaluate("${stringVar}", variables))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("not boolean");
+        }
+
+        @Test
+        void shouldHandleWhitespaceInBooleanExpression() {
+            // Arrange
+            Map<String, Object> variables = Map.of("active", true);
+
+            // Act
+            boolean result = evaluator.evaluate("${ active }", variables);
+
+            // Assert
+            assertThat(result).isTrue();
+        }
+
+        @Test
+        void shouldHandleWhitespaceInNegatedBooleanExpression() {
+            // Arrange
+            Map<String, Object> variables = Map.of("active", true);
+
+            // Act
+            boolean result = evaluator.evaluate("${ ! active }", variables);
+
+            // Assert
+            assertThat(result).isFalse();
+        }
+    }
+
+    @Nested
     @DisplayName("Parameterized comparisons")
     class ParameterizedTests {
 

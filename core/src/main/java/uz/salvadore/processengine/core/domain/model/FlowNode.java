@@ -16,7 +16,8 @@ import java.util.List;
         @JsonSubTypes.Type(value = CallActivity.class, name = "CALL_ACTIVITY"),
         @JsonSubTypes.Type(value = CompensationBoundaryEvent.class, name = "COMPENSATION_BOUNDARY"),
         @JsonSubTypes.Type(value = TimerBoundaryEvent.class, name = "TIMER_BOUNDARY"),
-        @JsonSubTypes.Type(value = ErrorBoundaryEvent.class, name = "ERROR_BOUNDARY")
+        @JsonSubTypes.Type(value = ErrorBoundaryEvent.class, name = "ERROR_BOUNDARY"),
+        @JsonSubTypes.Type(value = TimerIntermediateCatchEvent.class, name = "TIMER_INTERMEDIATE_CATCH")
 })
 public sealed interface FlowNode permits
         StartEvent,
@@ -27,7 +28,8 @@ public sealed interface FlowNode permits
         CallActivity,
         CompensationBoundaryEvent,
         TimerBoundaryEvent,
-        ErrorBoundaryEvent {
+        ErrorBoundaryEvent,
+        TimerIntermediateCatchEvent {
 
     String id();
 

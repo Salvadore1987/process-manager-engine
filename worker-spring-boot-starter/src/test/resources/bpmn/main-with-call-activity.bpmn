@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                  id="Definitions_main" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="main-with-call-activity" name="Main With Call Activity" isExecutable="true">
+    <bpmn:startEvent id="start">
+      <bpmn:outgoing>flow1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="flow1" sourceRef="start" targetRef="call-sub" />
+    <bpmn:callActivity id="call-sub" name="Call Sub" calledElement="sub-process">
+      <bpmn:incoming>flow1</bpmn:incoming>
+      <bpmn:outgoing>flow2</bpmn:outgoing>
+    </bpmn:callActivity>
+    <bpmn:sequenceFlow id="flow2" sourceRef="call-sub" targetRef="end" />
+    <bpmn:endEvent id="end">
+      <bpmn:incoming>flow2</bpmn:incoming>
+    </bpmn:endEvent>
+  </bpmn:process>
+</bpmn:definitions>

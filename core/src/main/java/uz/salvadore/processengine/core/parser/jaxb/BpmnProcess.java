@@ -28,7 +28,8 @@ public class BpmnProcess {
             @XmlElement(name = "exclusiveGateway", namespace = BpmnNamespaces.BPMN, type = BpmnExclusiveGateway.class),
             @XmlElement(name = "parallelGateway", namespace = BpmnNamespaces.BPMN, type = BpmnParallelGateway.class),
             @XmlElement(name = "callActivity", namespace = BpmnNamespaces.BPMN, type = BpmnCallActivity.class),
-            @XmlElement(name = "boundaryEvent", namespace = BpmnNamespaces.BPMN, type = BpmnBoundaryEvent.class)
+            @XmlElement(name = "boundaryEvent", namespace = BpmnNamespaces.BPMN, type = BpmnBoundaryEvent.class),
+            @XmlElement(name = "intermediateCatchEvent", namespace = BpmnNamespaces.BPMN, type = BpmnIntermediateCatchEvent.class)
     })
     private List<BpmnFlowElement> flowElements = new ArrayList<>();
 

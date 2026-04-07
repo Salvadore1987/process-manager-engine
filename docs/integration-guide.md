@@ -144,20 +144,41 @@ Body — ошибка:
 implementation("uz.salvadore:worker-spring-boot-starter:1.0-SNAPSHOT")
 ```
 
-**2. Настроить подключение к RabbitMQ (`application.yml`):**
+**2. Настроить подключение и автодеплой (`application.yml`):**
 
 ```yaml
 process-engine:
   worker:
+    engine-url: http://localhost:8080        # URL движка (обязателен для auto-deploy)
     rabbitmq:
       host: localhost
       port: 5672
       username: guest
       password: guest
       virtual-host: /
+    auto-deploy:
+      enabled: true                          # автодеплой BPMN при старте (default: true)
+      resource-location: classpath:bpmn/     # каталог с BPMN-файлами (default: classpath:bpmn/)
+      fail-on-error: true                    # остановить приложение при ошибке деплоя (default: true)
+    auth:                                    # опционально: если включена авторизация
+      enabled: false
+      token-uri: http://localhost:8180/realms/process-engine/protocol/openid-connect/token
+      client-id: process-engine-service
+      client-secret: process-engine-service-secret
 ```
 
-**3. Реализовать обработчик:**
+**3. Разместить BPMN-файлы в ресурсах:**
+
+```
+src/main/resources/bpmn/
+├── order-process.bpmn                    # main process
+└── charge-payment-subprocess.bpmn        # subprocess (CallActivity)
+```
+
+При старте приложения все `.bpmn` файлы из каталога автоматически деплоятся в движок через REST API.
+
+**4. Реализовать обработчик:**
+**4. Реализовать о��работчик:**
 
 ```java
 @Component
@@ -182,6 +203,7 @@ public class OrderValidationHandler implements ExternalTaskHandler {
 ```
 
 Starter автоматически:
+- **Деплоит BPMN-процессы** из `classpath:bpmn/` при старте через REST API движка (автодеплой)
 - Подключается к RabbitMQ с `basicQos(1)` для защиты от дублирования сообщений
 - Слушает общую очередь `task.execute`
 - Определяет topic задачи по заголовку `x-task-topic` и направляет к нужному handler
@@ -353,6 +375,25 @@ channel.basic_consume(
     on_message_callback=on_message)
 channel.start_consuming()
 ```
+
+### Деплой BPMN для не-Java сервисов
+
+Для сервисов, написанных не на Java/Spring, BPMN-файлы нужно задеплоить вручную через REST API:
+
+```bash
+# Один файл (без CallActivity)
+curl -X POST http://localhost:8080/api/v1/definitions \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@order-process.bpmn"
+
+# Bundle (main process + подпроцессы CallActivity)
+curl -X POST http://localhost:8080/api/v1/definitions/bundle \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "files=@order-process.bpmn" \
+  -F "files=@charge-payment-subprocess.bpmn"
+```
+
+> **Важно:** при деплое bundle первый файл считается основным процессом. Сервер автоматически валидирует все `calledElement` ссылки CallActivity.
 
 ---
 
@@ -687,7 +728,9 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/instances
 
 ## Чеклист интеграции
 
-1. **Задеплоить BPMN-определение** через `POST /api/v1/definitions`
+1. **Задеплоить BPMN-определение** — два способа:
+   - **Автодеплой (рекомендуется):** разместить `.bpmn` файлы в `src/main/resources/bpmn/` — при старте приложения с `worker-spring-boot-starter` они автоматически деплоятся (включая CallActivity подпроцессы)
+   - **Через REST API:** `POST /api/v1/definitions` (ручной деплой)
    - Общие RabbitMQ очереди (`task.execute`, `task.result`, `task.retry`) создаются при запуске движка
    - При деплое движок регистрирует result-callbacks для всех ServiceTask топиков
 2. **Реализовать worker-сервисы** для каждого `topic` из BPMN:

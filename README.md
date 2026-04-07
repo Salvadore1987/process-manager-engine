@@ -54,7 +54,7 @@ Java 21 движок бизнес-процессов на основе **BPMN 2.
 | `spring-integration` | Spring Boot Starter: auto-configuration, health indicators, метрики |
 | `security` | Spring Security OAuth2 Resource Server + Keycloak JWT интеграция |
 | `rest-api` | Spring Boot MVC приложение с REST API |
-| `worker-spring-boot-starter` | Starter для внешних worker-сервисов с аннотацией `@JobWorker` |
+| `worker-spring-boot-starter` | Starter для внешних worker-сервисов с аннотацией `@JobWorker` и автодеплоем BPMN-процессов |
 
 ## Технологии
 
@@ -128,6 +128,14 @@ curl -X POST http://localhost:8080/api/v1/instances \
 | `PROCESS_ENGINE_RETRY_MAX_ATTEMPTS` | `process-engine.retry.max-attempts` | `3` | Макс. кол-во retry |
 | `PROCESS_ENGINE_RETRY_BASE_INTERVAL` | `process-engine.retry.base-interval` | `5s` | Базовый интервал retry |
 | `PROCESS_ENGINE_RETRY_MAX_INTERVAL` | `process-engine.retry.max-interval` | `5m` | Макс. интервал retry |
+| `PROCESS_ENGINE_WORKER_ENGINE_URL` | `process-engine.worker.engine-url` | — | URL движка (обязателен для auto-deploy) |
+| `PROCESS_ENGINE_WORKER_AUTO_DEPLOY_ENABLED` | `process-engine.worker.auto-deploy.enabled` | `true` | Автодеплой BPMN при старте worker |
+| `PROCESS_ENGINE_WORKER_AUTO_DEPLOY_RESOURCE_LOCATION` | `process-engine.worker.auto-deploy.resource-location` | `classpath:bpmn/` | Каталог с BPMN-файлами |
+| `PROCESS_ENGINE_WORKER_AUTO_DEPLOY_FAIL_ON_ERROR` | `process-engine.worker.auto-deploy.fail-on-error` | `true` | Остановить запуск при ошибке деплоя |
+| `PROCESS_ENGINE_WORKER_AUTH_ENABLED` | `process-engine.worker.auth.enabled` | `false` | OAuth2 авторизация для worker → engine |
+| `PROCESS_ENGINE_WORKER_AUTH_TOKEN_URI` | `process-engine.worker.auth.token-uri` | — | URL для получения JWT-токена |
+| `PROCESS_ENGINE_WORKER_AUTH_CLIENT_ID` | `process-engine.worker.auth.client-id` | — | Client ID |
+| `PROCESS_ENGINE_WORKER_AUTH_CLIENT_SECRET` | `process-engine.worker.auth.client-secret` | — | Client Secret |
 | `PROCESS_ENGINE_SECURITY_ENABLED` | `process-engine.security.enabled` | `true` | Включить/выключить авторизацию |
 | `KEYCLOAK_ISSUER_URI` | `process-engine.security.issuer-uri` | `http://localhost:8180/realms/process-engine` | Keycloak realm URI |
 | `KEYCLOAK_ADMIN` | — | `admin` | Keycloak admin username |

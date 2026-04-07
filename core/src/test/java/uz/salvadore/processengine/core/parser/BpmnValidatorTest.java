@@ -65,6 +65,38 @@ class BpmnValidatorTest {
                 .allSatisfy(error -> assertThat(error.line()).isGreaterThan(0));
     }
 
+    @Test
+    void shouldPassBpmnWithTimerIntermediateCatchEvent() {
+        // Arrange
+        String bpmnXml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                                  id="Definitions_1"
+                                  targetNamespace="http://bpmn.io/schema/bpmn">
+                  <bpmn:process id="test-process" isExecutable="true">
+                    <bpmn:startEvent id="start"><bpmn:outgoing>f1</bpmn:outgoing></bpmn:startEvent>
+                    <bpmn:intermediateCatchEvent id="timer1">
+                      <bpmn:incoming>f1</bpmn:incoming><bpmn:outgoing>f2</bpmn:outgoing>
+                      <bpmn:timerEventDefinition>
+                        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT5S</bpmn:timeDuration>
+                      </bpmn:timerEventDefinition>
+                    </bpmn:intermediateCatchEvent>
+                    <bpmn:endEvent id="end"><bpmn:incoming>f2</bpmn:incoming></bpmn:endEvent>
+                    <bpmn:sequenceFlow id="f1" sourceRef="start" targetRef="timer1"/>
+                    <bpmn:sequenceFlow id="f2" sourceRef="timer1" targetRef="end"/>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """;
+
+        // Act
+        BpmnValidationResult result = validator.validate(bpmnXml);
+
+        // Assert
+        assertThat(result.valid()).isTrue();
+        assertThat(result.unsupportedElements()).isEmpty();
+    }
+
     private String loadBpmn(String resourcePath) {
         try (InputStream is = getClass().getClassLoader().getResourceAsStream(resourcePath)) {
             if (is == null) {

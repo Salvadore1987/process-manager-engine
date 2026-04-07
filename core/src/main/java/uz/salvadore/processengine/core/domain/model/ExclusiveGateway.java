@@ -8,7 +8,8 @@ public record ExclusiveGateway(
         String id,
         String name,
         List<String> incomingFlows,
-        List<String> outgoingFlows
+        List<String> outgoingFlows,
+        String defaultFlowId
 ) implements FlowNode {
 
     @Override

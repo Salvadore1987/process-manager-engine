@@ -3,7 +3,6 @@ package uz.salvadore.processengine.core.domain.model;
 import org.junit.jupiter.api.Test;
 import uz.salvadore.processengine.core.domain.enums.NodeType;
 
-import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,12 +14,13 @@ class FlowNodeTest {
         // Arrange & Act & Assert
         assertThat(new StartEvent("s", "S", List.of(), List.of()).type()).isEqualTo(NodeType.START_EVENT);
         assertThat(new EndEvent("e", "E", List.of(), List.of(), null).type()).isEqualTo(NodeType.END_EVENT);
-        assertThat(new ServiceTask("st", "ST", List.of(), List.of(), "topic", 3, Duration.ofSeconds(5)).type()).isEqualTo(NodeType.SERVICE_TASK);
-        assertThat(new ExclusiveGateway("eg", "EG", List.of(), List.of()).type()).isEqualTo(NodeType.EXCLUSIVE_GATEWAY);
+        assertThat(new ServiceTask("st", "ST", List.of(), List.of(), "topic", 3, java.time.Duration.ofSeconds(5)).type()).isEqualTo(NodeType.SERVICE_TASK);
+        assertThat(new ExclusiveGateway("eg", "EG", List.of(), List.of(), null).type()).isEqualTo(NodeType.EXCLUSIVE_GATEWAY);
         assertThat(new ParallelGateway("pg", "PG", List.of(), List.of()).type()).isEqualTo(NodeType.PARALLEL_GATEWAY);
         assertThat(new CallActivity("ca", "CA", List.of(), List.of(), "sub-process").type()).isEqualTo(NodeType.CALL_ACTIVITY);
         assertThat(new CompensationBoundaryEvent("cb", "CB", List.of(), List.of(), "ref").type()).isEqualTo(NodeType.COMPENSATION_BOUNDARY);
-        assertThat(new TimerBoundaryEvent("tb", "TB", List.of(), List.of(), "ref", Duration.ofMinutes(30), true).type()).isEqualTo(NodeType.TIMER_BOUNDARY);
+        assertThat(new TimerBoundaryEvent("tb", "TB", List.of(), List.of(), "ref",
+                new TimerDefinition(TimerDefinition.TimerType.DURATION, "PT30M"), true).type()).isEqualTo(NodeType.TIMER_BOUNDARY);
         assertThat(new ErrorBoundaryEvent("eb", "EB", List.of(), List.of(), "ref", "ERR_CODE", true).type()).isEqualTo(NodeType.ERROR_BOUNDARY);
     }
 
@@ -28,12 +28,12 @@ class FlowNodeTest {
     void serviceTaskShouldCarryTopic() {
         // Arrange & Act
         ServiceTask task = new ServiceTask("task1", "My Task", List.of("f1"), List.of("f2"),
-                "order.validate", 3, Duration.ofSeconds(10));
+                "order.validate", 3, java.time.Duration.ofSeconds(10));
 
         // Assert
         assertThat(task.topic()).isEqualTo("order.validate");
         assertThat(task.retryCount()).isEqualTo(3);
-        assertThat(task.retryInterval()).isEqualTo(Duration.ofSeconds(10));
+        assertThat(task.retryInterval()).isEqualTo(java.time.Duration.ofSeconds(10));
     }
 
     @Test
@@ -61,7 +61,7 @@ class FlowNodeTest {
     void boundaryEventsShouldCarryAttachedToRef() {
         // Arrange & Act
         TimerBoundaryEvent timer = new TimerBoundaryEvent("t1", "Timeout", List.of(), List.of("f1"),
-                "task1", Duration.ofMinutes(30), true);
+                "task1", new TimerDefinition(TimerDefinition.TimerType.DURATION, "PT30M"), true);
         ErrorBoundaryEvent error = new ErrorBoundaryEvent("e1", "Error", List.of(), List.of("f2"),
                 "task2", "ERR", true);
         CompensationBoundaryEvent compensation = new CompensationBoundaryEvent("c1", "Comp", List.of(), List.of(),
@@ -69,7 +69,8 @@ class FlowNodeTest {
 
         // Assert
         assertThat(timer.attachedToRef()).isEqualTo("task1");
-        assertThat(timer.duration()).isEqualTo(Duration.ofMinutes(30));
+        assertThat(timer.timerDefinition().type()).isEqualTo(TimerDefinition.TimerType.DURATION);
+        assertThat(timer.timerDefinition().value()).isEqualTo("PT30M");
         assertThat(timer.cancelActivity()).isTrue();
         assertThat(error.attachedToRef()).isEqualTo("task2");
         assertThat(error.errorCode()).isEqualTo("ERR");

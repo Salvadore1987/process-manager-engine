@@ -23,6 +23,7 @@ public class BpmnValidator {
             "parallelGateway",
             "callActivity",
             "boundaryEvent",
+            "intermediateCatchEvent",
             "sequenceFlow",
             "association",
             "error",
@@ -31,6 +32,8 @@ public class BpmnValidator {
             "conditionExpression",
             "timerEventDefinition",
             "timeDuration",
+            "timeDate",
+            "timeCycle",
             "errorEventDefinition",
             "compensateEventDefinition"
     );
@@ -56,7 +59,6 @@ public class BpmnValidator {
             "inclusiveGateway",
             "eventBasedGateway",
             "complexGateway",
-            "intermediateCatchEvent",
             "intermediateThrowEvent"
     );
 

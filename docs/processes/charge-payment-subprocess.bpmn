@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_1fq3smo" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.31.0" modeler:executionPlatform="Camunda Platform" modeler:executionPlatformVersion="7.22.0">
+  <bpmn:process id="charge-payment-subprocess" name="Charge Payment Subprocess" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1">
+      <bpmn:outgoing>Flow_0m9d87o</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="Flow_0m9d87o" sourceRef="StartEvent_1" targetRef="charge-payment" />
+    <bpmn:exclusiveGateway id="payment-success" default="Flow_18ud5gi">
+      <bpmn:incoming>Flow_12rnn5h</bpmn:incoming>
+      <bpmn:outgoing>Flow_18ud5gi</bpmn:outgoing>
+      <bpmn:outgoing>check-payment-flow</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_12rnn5h" sourceRef="charge-payment" targetRef="payment-success" />
+    <bpmn:sequenceFlow id="Flow_18ud5gi" sourceRef="payment-success" targetRef="check-status" />
+    <bpmn:serviceTask id="charge-payment" name="Charge Payment" camunda:type="external" camunda:topic="order.payment.charge">
+      <bpmn:incoming>Flow_0m9d87o</bpmn:incoming>
+      <bpmn:incoming>Flow_0wxby26</bpmn:incoming>
+      <bpmn:outgoing>Flow_12rnn5h</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="check-status" name="Check Status" camunda:type="external" camunda:topic="order.payment.status">
+      <bpmn:incoming>Flow_18ud5gi</bpmn:incoming>
+      <bpmn:outgoing>Flow_05ucnd3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="Event_0v6t5nz">
+      <bpmn:incoming>check-payment-flow</bpmn:incoming>
+      <bpmn:incoming>check-payment-status-flow</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="check-payment-flow" sourceRef="payment-success" targetRef="Event_0v6t5nz">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${isPaymentSuccess}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:exclusiveGateway id="payment-status" default="Flow_0a3qg4e">
+      <bpmn:incoming>Flow_05ucnd3</bpmn:incoming>
+      <bpmn:outgoing>check-payment-status-flow</bpmn:outgoing>
+      <bpmn:outgoing>Flow_0a3qg4e</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_05ucnd3" sourceRef="check-status" targetRef="payment-status" />
+    <bpmn:sequenceFlow id="check-payment-status-flow" sourceRef="payment-status" targetRef="Event_0v6t5nz">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${isPaymentSuccess}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:intermediateCatchEvent id="charge-wait">
+      <bpmn:incoming>Flow_0a3qg4e</bpmn:incoming>
+      <bpmn:outgoing>Flow_0wxby26</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="TimerEventDefinition_1j0k0dc">
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT5S</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:sequenceFlow id="Flow_0wxby26" sourceRef="charge-wait" targetRef="charge-payment" />
+    <bpmn:sequenceFlow id="Flow_0a3qg4e" sourceRef="payment-status" targetRef="charge-wait" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="charge-payment-subprocess">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="182" y="212" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_199z1b3_di" bpmnElement="payment-success" isMarkerVisible="true">
+        <dc:Bounds x="425" y="205" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1cbees1_di" bpmnElement="charge-payment">
+        <dc:Bounds x="270" y="190" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1ugjxlh_di" bpmnElement="check-status">
+        <dc:Bounds x="530" y="190" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0v6t5nz_di" bpmnElement="Event_0v6t5nz">
+        <dc:Bounds x="562" y="322" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_025jjqo_di" bpmnElement="payment-status" isMarkerVisible="true">
+        <dc:Bounds x="685" y="205" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1e0ctzu_di" bpmnElement="charge-wait">
+        <dc:Bounds x="302" y="82" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_0m9d87o_di" bpmnElement="Flow_0m9d87o">
+        <di:waypoint x="218" y="230" />
+        <di:waypoint x="270" y="230" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_12rnn5h_di" bpmnElement="Flow_12rnn5h">
+        <di:waypoint x="370" y="230" />
+        <di:waypoint x="425" y="230" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_18ud5gi_di" bpmnElement="Flow_18ud5gi">
+        <di:waypoint x="475" y="230" />
+        <di:waypoint x="530" y="230" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_06negos_di" bpmnElement="check-payment-flow">
+        <di:waypoint x="450" y="255" />
+        <di:waypoint x="450" y="340" />
+        <di:waypoint x="562" y="340" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_05ucnd3_di" bpmnElement="Flow_05ucnd3">
+        <di:waypoint x="630" y="230" />
+        <di:waypoint x="685" y="230" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1c1c2a2_di" bpmnElement="check-payment-status-flow">
+        <di:waypoint x="710" y="255" />
+        <di:waypoint x="710" y="340" />
+        <di:waypoint x="598" y="340" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0wxby26_di" bpmnElement="Flow_0wxby26">
+        <di:waypoint x="320" y="118" />
+        <di:waypoint x="320" y="190" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0a3qg4e_di" bpmnElement="Flow_0a3qg4e">
+        <di:waypoint x="710" y="205" />
+        <di:waypoint x="710" y="100" />
+        <di:waypoint x="338" y="100" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

@@ -11,6 +11,7 @@ import uz.salvadore.processengine.core.domain.model.ProcessInstance;
 import uz.salvadore.processengine.core.domain.model.SequenceFlow;
 import uz.salvadore.processengine.core.domain.model.StartEvent;
 import uz.salvadore.processengine.core.domain.model.TimerBoundaryEvent;
+import uz.salvadore.processengine.core.domain.model.TimerDefinition;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.context.ExecutionContext;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemorySequenceGenerator;
@@ -54,7 +55,8 @@ class TimerBoundaryEventHandlerTest {
     void shouldScheduleTimerAndEmitEvent() {
         // Arrange
         TimerBoundaryEvent timerEvent = new TimerBoundaryEvent("timer1", "Stock Timeout 30m",
-                List.of(), List.of("flow_timeout"), "Task_ReserveStock", Duration.ofMinutes(30), true);
+                List.of(), List.of("flow_timeout"), "Task_ReserveStock",
+                new TimerDefinition(TimerDefinition.TimerType.DURATION, "PT30M"), true);
         StartEvent startEvent = new StartEvent("start1", "Start", List.of(), List.of("flow1"));
         EndEvent endEvent = new EndEvent("end1", "End", List.of("flow_timeout"), List.of(), null);
         SequenceFlow flow1 = new SequenceFlow("flow1", "start1", "timer1", null);
@@ -97,7 +99,8 @@ class TimerBoundaryEventHandlerTest {
     void shouldHandleDifferentDurations() {
         // Arrange
         TimerBoundaryEvent timerEvent = new TimerBoundaryEvent("timer1", "Quick Timer",
-                List.of(), List.of("flow_out"), "someTask", Duration.ofSeconds(5), false);
+                List.of(), List.of("flow_out"), "someTask",
+                new TimerDefinition(TimerDefinition.TimerType.DURATION, "PT5S"), false);
         StartEvent startEvent = new StartEvent("start1", "Start", List.of(), List.of("flow1"));
         EndEvent endEvent = new EndEvent("end1", "End", List.of("flow_out"), List.of(), null);
         SequenceFlow flow1 = new SequenceFlow("flow1", "start1", "timer1", null);

@@ -33,10 +33,6 @@
     </bpmn:parallelGateway>
     <bpmn:sequenceFlow id="Flow_0r24pkb" sourceRef="notify-booking" targetRef="Gateway_0iyq7ut" />
     <bpmn:sequenceFlow id="Flow_1q7s1w8" sourceRef="Gateway_0iyq7ut" targetRef="charge-payment" />
-    <bpmn:serviceTask id="charge-payment" name="Charge Payment" camunda:type="external" camunda:topic="order.payment.charge">
-      <bpmn:incoming>Flow_1q7s1w8</bpmn:incoming>
-      <bpmn:outgoing>Flow_09qx15f</bpmn:outgoing>
-    </bpmn:serviceTask>
     <bpmn:sequenceFlow id="Flow_09qx15f" sourceRef="charge-payment" targetRef="deliver-order" />
     <bpmn:endEvent id="Event_1mawk0s">
       <bpmn:incoming>Flow_0v4h3d9</bpmn:incoming>
@@ -50,6 +46,10 @@
       <bpmn:incoming>Flow_09qx15f</bpmn:incoming>
       <bpmn:outgoing>Flow_0v4h3d9</bpmn:outgoing>
     </bpmn:serviceTask>
+    <bpmn:callActivity id="charge-payment" name="Charge Payment" calledElement="charge-payment-subprocess">
+      <bpmn:incoming>Flow_1q7s1w8</bpmn:incoming>
+      <bpmn:outgoing>Flow_09qx15f</bpmn:outgoing>
+    </bpmn:callActivity>
     <bpmn:association id="Association_1r83vnb" associationDirection="One" sourceRef="Event_0q9wgwn" targetRef="refund-payment" />
   </bpmn:process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
@@ -75,9 +75,6 @@
       <bpmndi:BPMNShape id="Gateway_14e71dx_di" bpmnElement="Gateway_0iyq7ut">
         <dc:Bounds x="685" y="215" width="50" height="50" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Activity_03k3op0_di" bpmnElement="charge-payment">
-        <dc:Bounds x="790" y="200" width="100" height="80" />
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_1mawk0s_di" bpmnElement="Event_1mawk0s">
         <dc:Bounds x="1112" y="222" width="36" height="36" />
       </bpmndi:BPMNShape>
@@ -87,6 +84,14 @@
       <bpmndi:BPMNShape id="Activity_033o9qp_di" bpmnElement="deliver-order">
         <dc:Bounds x="950" y="200" width="100" height="80" />
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1ifwrio_di" bpmnElement="charge-payment">
+        <dc:Bounds x="790" y="200" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Association_1r83vnb_di" bpmnElement="Association_1r83vnb">
+        <di:waypoint x="860" y="298" />
+        <di:waypoint x="860" y="360" />
+        <di:waypoint x="950" y="360" />
+      </bpmndi:BPMNEdge>
       <bpmndi:BPMNShape id="Event_1s308hj_di" bpmnElement="Event_0q9wgwn">
         <dc:Bounds x="842" y="262" width="36" height="36" />
       </bpmndi:BPMNShape>
@@ -129,11 +134,6 @@
       <bpmndi:BPMNEdge id="Flow_0v4h3d9_di" bpmnElement="Flow_0v4h3d9">
         <di:waypoint x="1050" y="240" />
         <di:waypoint x="1112" y="240" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Association_1r83vnb_di" bpmnElement="Association_1r83vnb">
-        <di:waypoint x="860" y="298" />
-        <di:waypoint x="860" y="360" />
-        <di:waypoint x="950" y="360" />
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>

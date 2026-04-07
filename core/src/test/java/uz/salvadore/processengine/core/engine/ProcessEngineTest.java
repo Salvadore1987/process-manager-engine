@@ -125,6 +125,27 @@ class ProcessEngineTest {
             // Assert
             assertThat(definitionStore.getByKey("simple-process")).isPresent();
         }
+
+        @Test
+        @DisplayName("Should reject deploy when ProcessDefinition contains a CallActivity")
+        void shouldRejectDeployWithCallActivity() {
+            // Arrange
+            StartEvent startEvent = new StartEvent("start1", "Start", List.of(), List.of("flow1"));
+            CallActivity callActivity = new CallActivity("call1", "Call Sub",
+                    List.of("flow1"), List.of("flow2"), "sub-process");
+            EndEvent endEvent = new EndEvent("end1", "End", List.of("flow2"), List.of(), null);
+            SequenceFlow flow1 = new SequenceFlow("flow1", "start1", "call1", null);
+            SequenceFlow flow2 = new SequenceFlow("flow2", "call1", "end1", null);
+
+            ProcessDefinition definition = ProcessDefinition.create("call-process", 1, "Call", "<xml/>",
+                    List.of(startEvent, callActivity, endEvent), List.of(flow1, flow2));
+
+            // Act & Assert
+            assertThatThrownBy(() -> engine.deploy(definition))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Call Activity")
+                    .hasMessageContaining("deployBundle");
+        }
     }
 
     @Nested
