@@ -1,15 +1,12 @@
 package uz.salvadore.processengine.core.engine.handler;
 
 import uz.salvadore.processengine.core.domain.event.ProcessEvent;
-import uz.salvadore.processengine.core.domain.event.TimerScheduledEvent;
 import uz.salvadore.processengine.core.domain.model.FlowNode;
 import uz.salvadore.processengine.core.domain.model.TimerDefinition;
 import uz.salvadore.processengine.core.domain.model.TimerIntermediateCatchEvent;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.context.ExecutionContext;
-import uz.salvadore.processengine.core.port.outgoing.SequenceGenerator;
 import uz.salvadore.processengine.core.port.outgoing.TimerService;
-import uz.salvadore.processengine.core.util.UUIDv7;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -23,11 +20,9 @@ import java.util.List;
 public final class TimerIntermediateCatchEventHandler implements NodeHandler {
 
     private final TimerService timerService;
-    private final SequenceGenerator eventSequencer;
 
-    public TimerIntermediateCatchEventHandler(TimerService timerService, SequenceGenerator eventSequencer) {
+    public TimerIntermediateCatchEventHandler(TimerService timerService) {
         this.timerService = timerService;
-        this.eventSequencer = eventSequencer;
     }
 
     @Override
@@ -52,16 +47,6 @@ public final class TimerIntermediateCatchEventHandler implements NodeHandler {
                 callback -> {}
         );
 
-        TimerScheduledEvent scheduledEvent = new TimerScheduledEvent(
-                UUIDv7.generate(),
-                context.getProcessInstance().getId(),
-                token.getId(),
-                node.id(),
-                scheduleDuration,
-                Instant.now(),
-                eventSequencer.next(context.getProcessInstance().getId())
-        );
-
-        return List.of(scheduledEvent);
+        return List.of();
     }
 }

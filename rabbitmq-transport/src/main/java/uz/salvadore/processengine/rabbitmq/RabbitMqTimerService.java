@@ -23,14 +23,15 @@ import java.util.function.Consumer;
 
 /**
  * RabbitMQ-based timer service implementation.
- * Uses TTL-based delayed queues to schedule timer events.
- * Each timer gets a dedicated temporary queue with TTL that dead-letters
- * to the timer result queue upon expiration.
+ * Uses a single shared pending queue with per-message TTL.
+ * When a message's TTL expires it is dead-lettered to the fired queue
+ * where the consumer picks it up and invokes the callback.
  */
 public final class RabbitMqTimerService implements TimerService {
 
     private static final Logger log = LoggerFactory.getLogger(RabbitMqTimerService.class);
-    private static final String TIMER_RESULT_QUEUE = "process-engine.timers.fired";
+    private static final String TIMER_PENDING_QUEUE = "process-engine.timers.pending";
+    private static final String TIMER_FIRED_QUEUE = "process-engine.timers.fired";
 
     private final RabbitMqConnectionManager connectionManager;
     private final RabbitMqTransportConfig config;
@@ -47,19 +48,23 @@ public final class RabbitMqTimerService implements TimerService {
     }
 
     /**
-     * Initialize the timer result queue and start consuming. Call once at startup.
+     * Initialize the pending and fired queues and start consuming. Call once at startup.
      */
     public void initialize(Consumer<TimerCallback> globalCallback) throws IOException, TimeoutException {
         Channel setupChannel = connectionManager.createChannel();
         try {
-            setupChannel.queueDeclare(TIMER_RESULT_QUEUE, true, false, false, null);
-            setupChannel.queueBind(TIMER_RESULT_QUEUE, config.getTimersExchange(), "timer.fired");
+            setupChannel.queueDeclare(TIMER_PENDING_QUEUE, true, false, false, Map.of(
+                    "x-dead-letter-exchange", config.getTimersExchange(),
+                    "x-dead-letter-routing-key", "timer.fired"
+            ));
+            setupChannel.queueDeclare(TIMER_FIRED_QUEUE, true, false, false, null);
+            setupChannel.queueBind(TIMER_FIRED_QUEUE, config.getTimersExchange(), "timer.fired");
         } finally {
             setupChannel.close();
         }
 
         this.consumerChannel = connectionManager.createChannel();
-        consumerChannel.basicConsume(TIMER_RESULT_QUEUE, false, new DefaultConsumer(consumerChannel) {
+        consumerChannel.basicConsume(TIMER_FIRED_QUEUE, false, new DefaultConsumer(consumerChannel) {
             @Override
             @SuppressWarnings("unchecked")
             public void handleDelivery(String consumerTag, Envelope envelope,
@@ -90,39 +95,30 @@ public final class RabbitMqTimerService implements TimerService {
             }
         });
 
-        log.info("RabbitMqTimerService initialized, consuming from: {}", TIMER_RESULT_QUEUE);
+        log.info("RabbitMqTimerService initialized, consuming from: {}", TIMER_FIRED_QUEUE);
     }
 
     @Override
     public void schedule(UUID processInstanceId, UUID tokenId, String nodeId,
                          Duration duration, Consumer<TimerCallback> callback) {
         try {
-            long delayMs = duration.toMillis();
-            String timerQueue = "process-engine.timer." + processInstanceId + "." + tokenId;
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("processInstanceId", processInstanceId.toString());
+            payload.put("tokenId", tokenId.toString());
+            payload.put("nodeId", nodeId);
+
+            byte[] body = objectMapper.writeValueAsBytes(payload);
+            AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder()
+                    .contentType("application/json")
+                    .deliveryMode(2)
+                    .expiration(String.valueOf(duration.toMillis()))
+                    .build();
 
             try (Channel channel = connectionManager.createChannel()) {
-                channel.queueDeclare(timerQueue, false, false, true, Map.of(
-                        "x-message-ttl", delayMs,
-                        "x-dead-letter-exchange", config.getTimersExchange(),
-                        "x-dead-letter-routing-key", "timer.fired",
-                        "x-expires", delayMs + 60000
-                ));
-
-                Map<String, Object> payload = new HashMap<>();
-                payload.put("processInstanceId", processInstanceId.toString());
-                payload.put("tokenId", tokenId.toString());
-                payload.put("nodeId", nodeId);
-
-                byte[] body = objectMapper.writeValueAsBytes(payload);
-                AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder()
-                        .contentType("application/json")
-                        .deliveryMode(2)
-                        .build();
-
-                channel.basicPublish("", timerQueue, properties, body);
-                log.debug("Timer scheduled: processInstanceId={}, tokenId={}, duration={}",
-                        processInstanceId, tokenId, duration);
+                channel.basicPublish("", TIMER_PENDING_QUEUE, properties, body);
             }
+            log.debug("Timer scheduled: processInstanceId={}, tokenId={}, duration={}",
+                    processInstanceId, tokenId, duration);
         } catch (IOException | TimeoutException e) {
             throw new RuntimeException("Failed to schedule timer", e);
         }

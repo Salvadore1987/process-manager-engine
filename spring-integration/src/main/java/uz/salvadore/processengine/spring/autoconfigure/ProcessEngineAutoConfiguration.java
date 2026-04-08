@@ -101,7 +101,7 @@ public class ProcessEngineAutoConfiguration {
                 Map.entry(NodeType.PARALLEL_GATEWAY, new ParallelGatewayHandler(sequenceGenerator)),
                 Map.entry(NodeType.CALL_ACTIVITY, new CallActivityHandler(sequenceGenerator)),
                 Map.entry(NodeType.TIMER_BOUNDARY, new TimerBoundaryEventHandler(timerService, sequenceGenerator)),
-                Map.entry(NodeType.TIMER_INTERMEDIATE_CATCH, new TimerIntermediateCatchEventHandler(timerService, sequenceGenerator)),
+                Map.entry(NodeType.TIMER_INTERMEDIATE_CATCH, new TimerIntermediateCatchEventHandler(timerService)),
                 Map.entry(NodeType.ERROR_BOUNDARY, new ErrorBoundaryEventHandler(sequenceGenerator)),
                 Map.entry(NodeType.COMPENSATION_BOUNDARY, new CompensationBoundaryEventHandler(sequenceGenerator))
         );
@@ -161,4 +161,5 @@ public class ProcessEngineAutoConfiguration {
             }
         };
     }
+
 }
