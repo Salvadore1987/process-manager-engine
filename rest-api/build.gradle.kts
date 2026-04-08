@@ -9,6 +9,7 @@ dependencies {
     implementation(project(":security"))
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.actuator)
+    runtimeOnly(libs.micrometer.registry.prometheus)
 
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.boot.starter.oauth2.resource.server)

@@ -14,16 +14,17 @@ Java-движок на основе паттерна **Process Manager** (Enterp
    - `ServiceTask`
    - `ExclusiveGateway`, `ParallelGateway`
    - `CompensationBoundaryEvent`, `TimerBoundaryEvent`, `ErrorBoundaryEvent`
+   - `TimerIntermediateCatchEvent`
    - `CallActivity`
 3. **Декларативная обработка ошибок** — retry через DLQ + requeue с exponential backoff, compensation boundary events, error end events
 4. **Корреляция сообщений** — correlation-id в AMQP header для привязки ответов к экземплярам процессов
 5. **Кастомные шаги** — регистрация activities через Java-интерфейс `ActivityHandler`
-6. **Опциональная персистентность** — включается/выключается свойством. При включении events сохраняются через адаптер `ProcessEventStore` (JDBC, MongoDB и т.д.). При выключении — `NoOpEventStore`
-7. **Таймеры** — `TimerBoundaryEvent` через RabbitMQ delayed message exchange plugin
+6. **Персистентность** — Redis как основное хранилище (event store, definitions, locks). При отсутствии Redis — автоматический fallback на InMemory-реализации
+7. **Таймеры** — `TimerBoundaryEvent` и `TimerIntermediateCatchEvent` через RabbitMQ delayed message exchange plugin
 8. **BPMN-парсер** — описание процессов через Camunda Modeler, парсинг через XSD + JAXB
-9. **BPMN-валидатор** — при деплое определения валидирует, что XML содержит только поддерживаемые элементы (StartEvent, EndEvent, ServiceTask, ExclusiveGateway, ParallelGateway, CallActivity, CompensationBoundaryEvent, TimerBoundaryEvent, ErrorBoundaryEvent). Процессы с неподдерживаемыми элементами (UserTask, ScriptTask, EventBasedGateway, SubProcess и т.д.) отклоняются с детальным списком неподдерживаемых элементов и их позиций в XML. Валидация свойств элементов не требуется — процессы описываются в Camunda Modeler, который ограничивает набор доступных свойств стандартом Camunda BPMN, поэтому невалидные атрибуты/свойства не могут появиться в XML
+9. **BPMN-валидатор** — при деплое определения валидирует, что XML содержит только поддерживаемые элементы (StartEvent, EndEvent, ServiceTask, ExclusiveGateway, ParallelGateway, CallActivity, TimerIntermediateCatchEvent, CompensationBoundaryEvent, TimerBoundaryEvent, ErrorBoundaryEvent). Процессы с неподдерживаемыми элементами (UserTask, ScriptTask, EventBasedGateway, SubProcess и т.д.) отклоняются с детальным списком неподдерживаемых элементов и их позиций в XML. Валидация свойств элементов не требуется — процессы описываются в Camunda Modeler, который ограничивает набор доступных свойств стандартом Camunda BPMN, поэтому невалидные атрибуты/свойства не могут появиться в XML
 10. **RabbitMQ-транспорт** — каждый тип ServiceTask имеет свой topic (exchange + routing key), внешние сервисы слушают свои топики
-10. **REST API** — полный Camunda-like API: definition CRUD, instance lifecycle, variables, history, incidents
+11. **REST API** — полный Camunda-like API: definition CRUD, instance lifecycle, variables, history, incidents
 
 ### Non-Functional Requirements
 
@@ -61,9 +62,9 @@ Event-sourced архитектура: состояние экземпляров 
 └──────────────┬──────────────────────────────┬───────────────┘
                │                              │
 ┌──────────────▼──────────┐   ┌───────────────▼───────────────┐
-│   rabbitmq-transport    │   │   persistence adapters        │
-│  AMQP Client (official) │   │   (JDBC, MongoDB, etc.)       │
-│  Topic per task type     │   │   implements ProcessEventStore│
+│   rabbitmq-transport    │   │   redis-persistence           │
+│  AMQP Client (official) │   │   Redis EventStore, DefStore  │
+│  Topic per task type     │   │   Lock, ActivityLog, Mapping  │
 └──────────────┬──────────┘   └───────────────────────────────┘
                │
      ┌─────────▼──────────────────────────────────────────────┐
@@ -90,7 +91,7 @@ Event-sourced архитектура: состояние экземпляров 
 
 ### Module Structure
 
-Проект состоит из 6 Gradle-модулей:
+Проект состоит из 7 Gradle-модулей:
 
 #### 1. `core`
 Standalone движок, не зависит от Spring и RabbitMQ.
@@ -106,7 +107,13 @@ Standalone движок, не зависит от Spring и RabbitMQ.
 
 **Ключевые порты:**
 - `MessageTransport` — отправка/получение сообщений (реализуется в rabbitmq-transport)
-- `ProcessEventStore` — сохранение/чтение событий (реализуется адаптером БД или `NoOpEventStore`)
+- `ProcessEventStore` — сохранение/чтение событий (реализуется в redis-persistence или InMemory fallback)
+- `ProcessDefinitionStore` — хранение определений процессов
+- `SequenceGenerator` — генерация sequence numbers для событий
+- `InstanceDefinitionMapping` — маппинг instance → definition
+- `ProcessInstanceLock` — distributed lock per instance
+- `ActivityLog` — бизнес-лог выполнения задач
+- `ChildInstanceMapping` — маппинг дочерних экземпляров CallActivity
 - `DeploymentListener` — callback при деплое определения (реализуется в spring-integration для создания RabbitMQ очередей)
 - `ActivityHandler` — интерфейс для кастомных шагов
 - `TimerService` — планирование и отмена таймеров
@@ -150,9 +157,22 @@ Spring Boot Starter для автоконфигурации движка.
 - Properties mapping: `process-engine.*` → конфигурация движка
 - Подключение Micrometer метрик
 - Health indicators для RabbitMQ connectivity и engine status
-- Conditional beans: `@ConditionalOnProperty("process-engine.persistence.enabled")`
+- Fallback InMemory-адаптеры при отсутствии Redis
 
-#### 4. `rest-api`
+#### 4. `redis-persistence`
+Redis-реализация всех port-интерфейсов для персистентности.
+
+**Ответственность:**
+- `RedisEventStore` — event sourcing через Redis Lists (`pe:events:{id}`)
+- `RedisProcessDefinitionStore` — хранение определений процессов
+- `RedisSequenceGenerator` — атомарный счётчик через Redis INCR
+- `RedisInstanceDefinitionMapping` — маппинг instance → definition
+- `RedisProcessInstanceLock` — distributed lock через SET NX PX
+- `RedisActivityLog` — бизнес-лог через Redis Hash
+- `RedisChildInstanceMapping` — маппинг дочерних экземпляров CallActivity
+- Auto-configuration: автоматическая регистрация Redis-адаптеров при наличии Spring Data Redis
+
+#### 5. `rest-api`
 Spring Boot MVC приложение с полным Camunda-like REST API.
 
 **Ответственность:**
@@ -161,7 +181,7 @@ Spring Boot MVC приложение с полным Camunda-like REST API.
 - Error handling и стандартизированные ответы
 - Virtual threads через `spring.threads.virtual.enabled=true`
 
-#### 5. `security`
+#### 6. `security`
 OAuth2/Keycloak интеграция для авторизации REST API.
 
 **Ответственность:**
@@ -169,7 +189,7 @@ OAuth2/Keycloak интеграция для авторизации REST API.
 - `KeycloakJwtAuthenticationConverter` — конвертация JWT → Spring Security authorities
 - Роли: `process-admin`, `process-operator`, `process-viewer`, `process-deployer`
 
-#### 6. `worker-spring-boot-starter`
+#### 7. `worker-spring-boot-starter`
 Клиентский Spring Boot Starter для внешних сервисов (workers).
 
 **Ответственность:**
@@ -276,9 +296,9 @@ FlowNode *──* SequenceFlow (incoming/outgoing)
 
 ### Storage
 
-- **Event Store**: порт `ProcessEventStore` с адаптерами (JDBC для PostgreSQL/MySQL, MongoDB, etc.)
-- **При выключенной персистентности**: `NoOpEventStore` — события генерируются для in-memory replay, но не сохраняются
-- **Process definitions**: хранятся в памяти после деплоя, опционально в event store
+- **Event Store**: порт `ProcessEventStore` — основная реализация через Redis (`redis-persistence` модуль)
+- **При отсутствии Redis**: автоматический fallback на `InMemoryEventStore` и другие InMemory-адаптеры
+- **Process definitions**: хранятся через `ProcessDefinitionStore` (Redis или InMemory)
 
 ## API Design
 
@@ -363,8 +383,8 @@ FlowNode *──* SequenceFlow (incoming/outgoing)
   ],
   "supportedElements": [
     "StartEvent", "EndEvent", "ServiceTask", "ExclusiveGateway",
-    "ParallelGateway", "CallActivity", "CompensationBoundaryEvent",
-    "TimerBoundaryEvent", "ErrorBoundaryEvent"
+    "ParallelGateway", "CallActivity", "TimerIntermediateCatchEvent",
+    "CompensationBoundaryEvent", "TimerBoundaryEvent", "ErrorBoundaryEvent"
   ]
 }
 ```

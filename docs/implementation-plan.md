@@ -2,7 +2,7 @@
 
 ## Context
 
-Java 21 движок бизнес-процессов на основе BPMN 2.0 с event-sourced архитектурой и RabbitMQ транспортом. Проект состоит из 6 модулей: `core`, `rabbitmq-transport`, `spring-integration`, `rest-api`, `security`, `worker-spring-boot-starter`. Спецификация в `docs/process-manager-engine.md`.
+Java 21 движок бизнес-процессов на основе BPMN 2.0 с event-sourced архитектурой и RabbitMQ транспортом. Проект состоит из 7 модулей: `core`, `rabbitmq-transport`, `redis-persistence`, `spring-integration`, `rest-api`, `security`, `worker-spring-boot-starter`. Спецификация в `docs/process-manager-engine.md`.
 
 ---
 
@@ -86,14 +86,13 @@ uz.salvadore.processengine.core
 
 ## Phase 3: Event Sourcing и State Reconstruction
 
-**Цель:** Генерация событий, application (replay), NoOp и InMemory event store.
+**Цель:** Генерация событий, application (replay), InMemory event store.
 
 **Пакеты:**
 ```
 uz.salvadore.processengine.core
   .engine.eventsourcing — EventApplier, EventSequencer, ProcessInstanceProjection
-  .adapter.noop        — NoOpEventStore
-  .adapter.inmemory    — InMemoryEventStore (ConcurrentHashMap, для тестов)
+  .adapter.inmemory    — InMemoryEventStore (ConcurrentHashMap, fallback при отсутствии Redis)
 ```
 
 **Ключевые решения:**
@@ -101,7 +100,7 @@ uz.salvadore.processengine.core
 - ProcessInstanceProjection — fold событий через EventApplier → иммутабельный ProcessInstance
 - InMemoryEventStore — `ConcurrentHashMap<UUID, List<ProcessEvent>>`, thread-safe
 
-**Тесты (~10):** apply каждого типа события, полный replay линейного процесса, InMemoryEventStore CRUD + concurrent access, NoOpEventStore no-op
+**Тесты (~10):** apply каждого типа события, полный replay линейного процесса, InMemoryEventStore CRUD + concurrent access
 
 **Проверка:** `./gradlew :core:test`, reconstruction из событий даёт идентичный state
 
@@ -185,11 +184,11 @@ uz.salvadore.processengine.spring
 
 **Ключевые решения:**
 - `@ConfigurationProperties("process-engine")` — persistence.enabled, rabbitmq.*, retry.*
-- `@ConditionalOnProperty("process-engine.persistence.enabled")` → real EventStore / NoOpEventStore
+- `@ConditionalOnMissingBean` → Redis или InMemory fallback
 - Micrometer: counters instances.started/completed/errors, timer task.duration по topic
 - `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
 
-**Тесты (~6):** auto-configuration с default properties, conditional NoOp/real EventStore, health indicators, property binding
+**Тесты (~6):** auto-configuration с default properties, conditional Redis/InMemory EventStore, health indicators, property binding
 
 **Проверка:** `./gradlew :spring-integration:test`, Spring context загружается с корректными beans
 
