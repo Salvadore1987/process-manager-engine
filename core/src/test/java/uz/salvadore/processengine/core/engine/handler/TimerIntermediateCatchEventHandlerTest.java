@@ -3,10 +3,8 @@ package uz.salvadore.processengine.core.engine.handler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import uz.salvadore.processengine.core.adapter.inmemory.InMemorySequenceGenerator;
 import uz.salvadore.processengine.core.domain.enums.ProcessState;
 import uz.salvadore.processengine.core.domain.event.ProcessEvent;
-import uz.salvadore.processengine.core.domain.event.TimerScheduledEvent;
 import uz.salvadore.processengine.core.domain.model.EndEvent;
 import uz.salvadore.processengine.core.domain.model.ProcessDefinition;
 import uz.salvadore.processengine.core.domain.model.ProcessInstance;
@@ -51,9 +49,8 @@ class TimerIntermediateCatchEventHandlerTest {
     }
 
     private final RecordingTimerService timerService = new RecordingTimerService();
-    private final InMemorySequenceGenerator sequenceGenerator = new InMemorySequenceGenerator();
     private final TimerIntermediateCatchEventHandler handler =
-            new TimerIntermediateCatchEventHandler(timerService, sequenceGenerator);
+            new TimerIntermediateCatchEventHandler(timerService);
 
     private ExecutionContext createContext(UUID processInstanceId, ProcessDefinition definition, Token token) {
         ProcessInstance instance = ProcessInstance.restore(
@@ -79,7 +76,7 @@ class TimerIntermediateCatchEventHandlerTest {
     class DurationTypeTests {
 
         @Test
-        @DisplayName("Should schedule timer with correct duration and return TimerScheduledEvent")
+        @DisplayName("Should schedule timer with correct duration and return empty event list")
         void shouldScheduleTimerWithCorrectDuration() {
             // Arrange
             TimerDefinition timerDef = new TimerDefinition(TimerDefinition.TimerType.DURATION, "PT30M");
@@ -95,15 +92,7 @@ class TimerIntermediateCatchEventHandlerTest {
             List<ProcessEvent> events = handler.handle(token, timerEvent, context);
 
             // Assert
-            assertThat(events).hasSize(1);
-            assertThat(events.getFirst()).isInstanceOf(TimerScheduledEvent.class);
-
-            TimerScheduledEvent scheduledEvent = (TimerScheduledEvent) events.getFirst();
-            assertThat(scheduledEvent.processInstanceId()).isEqualTo(processInstanceId);
-            assertThat(scheduledEvent.tokenId()).isEqualTo(token.getId());
-            assertThat(scheduledEvent.nodeId()).isEqualTo("timer1");
-            assertThat(scheduledEvent.duration()).isEqualTo(Duration.ofMinutes(30));
-            assertThat(scheduledEvent.sequenceNumber()).isEqualTo(1L);
+            assertThat(events).isEmpty();
 
             assertThat(timerService.scheduleCalls).hasSize(1);
             RecordingTimerService.ScheduleCall call = timerService.scheduleCalls.getFirst();
@@ -126,11 +115,11 @@ class TimerIntermediateCatchEventHandlerTest {
             ExecutionContext context = createContext(UUID.randomUUID(), definition, token);
 
             // Act
-            List<ProcessEvent> events = handler.handle(token, timerEvent, context);
+            handler.handle(token, timerEvent, context);
 
             // Assert
-            TimerScheduledEvent scheduledEvent = (TimerScheduledEvent) events.getFirst();
-            assertThat(scheduledEvent.duration()).isEqualTo(Duration.ofSeconds(5));
+            assertThat(timerService.scheduleCalls).hasSize(1);
+            assertThat(timerService.scheduleCalls.getFirst().duration()).isEqualTo(Duration.ofSeconds(5));
         }
     }
 
@@ -153,16 +142,13 @@ class TimerIntermediateCatchEventHandlerTest {
             ExecutionContext context = createContext(UUID.randomUUID(), definition, token);
 
             // Act
-            List<ProcessEvent> events = handler.handle(token, timerEvent, context);
+            handler.handle(token, timerEvent, context);
 
             // Assert
-            TimerScheduledEvent scheduledEvent = (TimerScheduledEvent) events.getFirst();
-            // The duration should be approximately 2 hours (allowing for test execution time)
-            assertThat(scheduledEvent.duration()).isPositive();
-            assertThat(scheduledEvent.duration()).isCloseTo(Duration.ofHours(2), Duration.ofSeconds(5));
-
             assertThat(timerService.scheduleCalls).hasSize(1);
             assertThat(timerService.scheduleCalls.getFirst().duration()).isPositive();
+            assertThat(timerService.scheduleCalls.getFirst().duration())
+                    .isCloseTo(Duration.ofHours(2), Duration.ofSeconds(5));
         }
 
         @Test
@@ -180,12 +166,9 @@ class TimerIntermediateCatchEventHandlerTest {
             ExecutionContext context = createContext(UUID.randomUUID(), definition, token);
 
             // Act
-            List<ProcessEvent> events = handler.handle(token, timerEvent, context);
+            handler.handle(token, timerEvent, context);
 
             // Assert
-            TimerScheduledEvent scheduledEvent = (TimerScheduledEvent) events.getFirst();
-            assertThat(scheduledEvent.duration()).isEqualTo(Duration.ZERO);
-
             assertThat(timerService.scheduleCalls).hasSize(1);
             assertThat(timerService.scheduleCalls.getFirst().duration()).isEqualTo(Duration.ZERO);
         }
@@ -209,16 +192,14 @@ class TimerIntermediateCatchEventHandlerTest {
             ExecutionContext context = createContext(processInstanceId, definition, token);
 
             // Act
-            List<ProcessEvent> events = handler.handle(token, timerEvent, context);
+            handler.handle(token, timerEvent, context);
 
             // Assert
-            TimerScheduledEvent scheduledEvent = (TimerScheduledEvent) events.getFirst();
-            assertThat(scheduledEvent.duration()).isEqualTo(Duration.ofHours(10));
-            assertThat(scheduledEvent.processInstanceId()).isEqualTo(processInstanceId);
-            assertThat(scheduledEvent.nodeId()).isEqualTo("timer1");
-
             assertThat(timerService.scheduleCalls).hasSize(1);
-            assertThat(timerService.scheduleCalls.getFirst().duration()).isEqualTo(Duration.ofHours(10));
+            RecordingTimerService.ScheduleCall call = timerService.scheduleCalls.getFirst();
+            assertThat(call.duration()).isEqualTo(Duration.ofHours(10));
+            assertThat(call.processInstanceId()).isEqualTo(processInstanceId);
+            assertThat(call.nodeId()).isEqualTo("timer1");
         }
 
         @Test
@@ -234,11 +215,11 @@ class TimerIntermediateCatchEventHandlerTest {
             ExecutionContext context = createContext(UUID.randomUUID(), definition, token);
 
             // Act
-            List<ProcessEvent> events = handler.handle(token, timerEvent, context);
+            handler.handle(token, timerEvent, context);
 
             // Assert
-            TimerScheduledEvent scheduledEvent = (TimerScheduledEvent) events.getFirst();
-            assertThat(scheduledEvent.duration()).isEqualTo(Duration.ofMinutes(5));
+            assertThat(timerService.scheduleCalls).hasSize(1);
+            assertThat(timerService.scheduleCalls.getFirst().duration()).isEqualTo(Duration.ofMinutes(5));
         }
     }
 
@@ -247,8 +228,8 @@ class TimerIntermediateCatchEventHandlerTest {
     class CommonBehaviorTests {
 
         @Test
-        @DisplayName("Should always return exactly one TimerScheduledEvent")
-        void shouldReturnExactlyOneEvent() {
+        @DisplayName("Should return empty event list (token waiting handled by engine)")
+        void shouldReturnEmptyEventList() {
             // Arrange
             TimerDefinition timerDef = new TimerDefinition(TimerDefinition.TimerType.DURATION, "PT1H");
             TimerIntermediateCatchEvent timerEvent = new TimerIntermediateCatchEvent(
@@ -262,53 +243,8 @@ class TimerIntermediateCatchEventHandlerTest {
             List<ProcessEvent> events = handler.handle(token, timerEvent, context);
 
             // Assert
-            assertThat(events)
-                    .hasSize(1)
-                    .allSatisfy(event -> assertThat(event).isInstanceOf(TimerScheduledEvent.class));
-        }
-
-        @Test
-        @DisplayName("Should set occurredAt timestamp on the event")
-        void shouldSetOccurredAtTimestamp() {
-            // Arrange
-            Instant before = Instant.now();
-            TimerDefinition timerDef = new TimerDefinition(TimerDefinition.TimerType.DURATION, "PT10M");
-            TimerIntermediateCatchEvent timerEvent = new TimerIntermediateCatchEvent(
-                    "timer1", "10 min timer",
-                    List.of("flow_to_timer"), List.of("flow_from_timer"), timerDef);
-            ProcessDefinition definition = createMinimalDefinition(timerEvent);
-            Token token = Token.create("timer1");
-            ExecutionContext context = createContext(UUID.randomUUID(), definition, token);
-
-            // Act
-            List<ProcessEvent> events = handler.handle(token, timerEvent, context);
-
-            // Assert
-            Instant after = Instant.now();
-            TimerScheduledEvent scheduledEvent = (TimerScheduledEvent) events.getFirst();
-            assertThat(scheduledEvent.occurredAt())
-                    .isAfterOrEqualTo(before)
-                    .isBeforeOrEqualTo(after);
-        }
-
-        @Test
-        @DisplayName("Should assign non-null event ID")
-        void shouldAssignNonNullEventId() {
-            // Arrange
-            TimerDefinition timerDef = new TimerDefinition(TimerDefinition.TimerType.DURATION, "PT1M");
-            TimerIntermediateCatchEvent timerEvent = new TimerIntermediateCatchEvent(
-                    "timer1", "1 min timer",
-                    List.of("flow_to_timer"), List.of("flow_from_timer"), timerDef);
-            ProcessDefinition definition = createMinimalDefinition(timerEvent);
-            Token token = Token.create("timer1");
-            ExecutionContext context = createContext(UUID.randomUUID(), definition, token);
-
-            // Act
-            List<ProcessEvent> events = handler.handle(token, timerEvent, context);
-
-            // Assert
-            TimerScheduledEvent scheduledEvent = (TimerScheduledEvent) events.getFirst();
-            assertThat(scheduledEvent.id()).isNotNull();
+            assertThat(events).isEmpty();
+            assertThat(timerService.scheduleCalls).hasSize(1);
         }
     }
 }
