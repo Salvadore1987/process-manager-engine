@@ -2,10 +2,51 @@
 
 Java 21 движок бизнес-процессов на основе **BPMN 2.0** с event-sourced архитектурой и RabbitMQ транспортом. Совместим с [Camunda Modeler](https://camunda.com/download/modeler/) для визуального проектирования процессов.
 
+## Содержание
+
+- [Возможности](#возможности)
+- [Архитектура](#архитектура)
+  - [Модули](#модули)
+- [Технологии](#технологии)
+- [Быстрый старт](#быстрый-старт)
+  - [Требования](#требования)
+  - [Клонирование и запуск](#1-клонирование-и-запуск)
+  - [Запуск через Docker Compose](#2-запуск-через-docker-compose-все-сервисы)
+  - [Деплой BPMN-процесса](#3-деплой-bpmn-процесса)
+- [Конфигурация](#конфигурация)
+- [Авторизация (Keycloak)](#авторизация-keycloak)
+  - [Роли](#роли)
+  - [Тестовые пользователи](#тестовые-пользователи-devlocal)
+  - [Получение JWT-токена](#получение-jwt-токена)
+  - [Service-to-service](#service-to-service-client-credentials)
+  - [Отключение авторизации](#отключение-авторизации-для-разработки)
+- [REST API](#rest-api)
+  - [Process Definitions](#process-definitions)
+  - [Process Instances](#process-instances)
+  - [Variables](#variables)
+  - [Messages](#messages)
+  - [History](#history)
+  - [Incidents](#incidents)
+  - [Формат ошибок](#формат-ошибок)
+- [Поддерживаемые BPMN-элементы](#поддерживаемые-bpmn-элементы)
+  - [Условия ExclusiveGateway](#условия-exclusivegateway)
+- [Redis Data Model](#redis-data-model)
+  - [Activity Log](#activity-log)
+  - [Валидация процесса](#валидация-процесса)
+- [RabbitMQ Topology](#rabbitmq-topology)
+- [Сборка и тестирование](#сборка-и-тестирование)
+  - [Статистика тестов](#статистика-тестов)
+- [Развёртывание](#развёртывание)
+- [Мониторинг](#мониторинг)
+  - [Health Endpoints](#health-endpoints)
+  - [Метрики (Micrometer)](#метрики-micrometer)
+- [Документация](#документация)
+- [Лицензия](#лицензия)
+
 ## Возможности
 
 - **BPMN 2.0 парсинг и валидация** — загрузка XML из Camunda Modeler с проверкой поддерживаемых элементов
-- **Token-based execution** — продвижение токенов по графу: StartEvent, EndEvent, ServiceTask, ExclusiveGateway, ParallelGateway, CallActivity, Boundary Events
+- **Token-based execution** — продвижение токенов по графу: StartEvent, EndEvent, ServiceTask, ExclusiveGateway, ParallelGateway, CallActivity, TimerIntermediateCatchEvent, Boundary Events
 - **Error handling & Compensation** — маршрутизация ошибок через ErrorBoundaryEvent, автоматическая компенсация завершённых задач в обратном порядке (LIFO) при отсутствии error boundary
 - **Event Sourcing** — все изменения состояния записываются как события, состояние восстанавливается через replay, персистентность через Redis
 - **Activity Log** — отдельный Redis Hash (`pe:activity-log:{id}`) с бизнес-шагами процесса для отладки
@@ -34,7 +75,7 @@ Java 21 движок бизнес-процессов на основе **BPMN 2.
 │  Ports: ProcessEventStore, ProcessDefinitionStore,          │
 │         SequenceGenerator, InstanceDefinitionMapping,       │
 │         ProcessInstanceLock, ActivityLog,                    │
-│         MessageTransport, TimerService                      │
+│         ChildInstanceMapping, MessageTransport, TimerService│
 └──────────────┬───────────────────┬──────────────────────────┘
                │                   │
 ┌──────────────▼──────────┐ ┌──────▼──────────────────┐
@@ -50,7 +91,7 @@ Java 21 движок бизнес-процессов на основе **BPMN 2.
 |--------|----------|
 | `core` | Standalone движок: BPMN-парсер, token engine, event sourcing, port-интерфейсы |
 | `rabbitmq-transport` | Реализация `MessageTransport` и `TimerService` поверх RabbitMQ |
-| `redis-persistence` | Redis-реализация `ProcessEventStore`, `ProcessDefinitionStore`, `SequenceGenerator`, `InstanceDefinitionMapping`, `ProcessInstanceLock`, `ActivityLog` |
+| `redis-persistence` | Redis-реализация `ProcessEventStore`, `ProcessDefinitionStore`, `SequenceGenerator`, `InstanceDefinitionMapping`, `ProcessInstanceLock`, `ActivityLog`, `ChildInstanceMapping` |
 | `spring-integration` | Spring Boot Starter: auto-configuration, health indicators, метрики |
 | `security` | Spring Security OAuth2 Resource Server + Keycloak JWT интеграция |
 | `rest-api` | Spring Boot MVC приложение с REST API |
@@ -274,6 +315,19 @@ GET /api/v1/definitions/{key}/versions
 ```
 
 **Ответ (200 OK):** `ProcessDefinitionDto[]`
+
+#### Deploy Bundle (несколько BPMN)
+
+```
+POST /api/v1/definitions/bundle
+Content-Type: multipart/form-data
+```
+
+Загружает несколько BPMN XML файлов одним запросом (main process + подпроцессы CallActivity). Сервер автоматически валидирует все `calledElement` ссылки.
+
+**Параметры:** `files` — массив BPMN XML файлов (multipart)
+
+**Ответ (201 Created):** `ProcessDefinitionDto[]`
 
 #### Undeploy
 
@@ -519,11 +573,24 @@ Content-Type: application/json
 | `ExclusiveGateway` | Условный роутинг (XOR) |
 | `ParallelGateway` | Параллельное выполнение (AND fork/join) |
 | `CallActivity` | Вызов подпроцесса по `calledElement` |
+| `TimerIntermediateCatchEvent` | Промежуточное событие-таймер (пауза в процессе) |
 | `TimerBoundaryEvent` | Таймер на задаче (таймаут) |
 | `ErrorBoundaryEvent` | Обработка ошибок на задаче |
 | `CompensationBoundaryEvent` | Компенсация при откате |
 
 Элементы вне этого списка (UserTask, ScriptTask, SubProcess и т.д.) отклоняются при валидации.
+
+### Условия ExclusiveGateway
+
+Поддерживаемые форматы условий на sequence flows:
+
+| Формат | Пример | Описание |
+|--------|--------|----------|
+| Сравнение | `${variable > value}` | Операторы: `==`, `!=`, `>`, `<`, `>=`, `<=` |
+| Boolean переменная | `${isApproved}` | Значение boolean переменной |
+| Отрицание | `${!isApproved}` | Отрицание boolean переменной |
+
+Также поддерживается атрибут `default` на `ExclusiveGateway` для указания маршрута по умолчанию.
 
 ## Redis Data Model
 
@@ -537,6 +604,8 @@ Content-Type: application/json
 | `pe:inst-def:{instanceId}` | String | Маппинг instance → definition ID |
 | `pe:instances` | Set | Все ID процессов |
 | `pe:lock:{instanceId}` | String | Distributed lock (SET NX PX 30s) |
+| `pe:child-parent:{childId}` | String | Маппинг дочернего экземпляра → родительский ID |
+| `pe:parent-children:{parentId}` | Set | Дочерние экземпляры CallActivity |
 | `pe:activity-log:{instanceId}` | Hash | Бизнес-лог: field=nodeId, value=JSON со статусом задачи |
 
 ### Activity Log
@@ -555,12 +624,19 @@ _process        → {"status":"ERROR","errorCode":"...","occurredAt":"..."}
 
 ### Валидация процесса
 
-Python-скрипт для проверки что все задачи BPMN-диаграммы были выполнен��:
+Python-скрипт для проверки что все задачи BPMN-процесса (включая CallActivity подпроцессы) были выполнены:
 
 ```bash
 pip install redis
-python3 docs/validate_process.py <bpmn_file> <process_instance_id>
+
+# Указываем каталог с BPMN-файлами (main process + все подпроцессы)
+python3 docs/validate_process.py docs/processes <process_instance_id>
+
+# Redis на другом хосте
+python3 docs/validate_process.py docs/processes <process_instance_id> --redis-host redis.staging.internal --redis-port 6379
 ```
+
+Скрипт парсит все `.bpmn` файлы из каталога, автоматически разрешает CallActivity ссылки, читает события из Redis для основного и дочерних экземпляров, и выводит полный отчёт о статусе каждой задачи.
 
 ## RabbitMQ Topology
 
@@ -608,13 +684,14 @@ x-task-topic, а не через отдельные очереди для каж
 
 | Модуль | Тесты |
 |--------|-------|
-| core | 200 |
-| rabbitmq-transport | 49 (22 unit + 27 integration) |
-| redis-persistence | 23 (Testcontainers Redis) |
-| spring-integration | 43 |
-| security | 42 |
-| rest-api | 52 (29 functional + 23 security) |
-| **Итого** | **409** |
+| core | 270 |
+| rabbitmq-transport | 41 |
+| redis-persistence | 28 (Testcontainers Redis) |
+| spring-integration | 44 |
+| security | 44 |
+| rest-api | 55 |
+| worker-spring-boot-starter | 25 |
+| **Итого** | **507** |
 
 ## Развёртывание
 
@@ -680,6 +757,18 @@ GET /actuator/health
 | `process.engine.task.duration` | Timer | Длительность задач (tag: topic) |
 
 Prometheus endpoint: `GET /actuator/prometheus`
+
+## Документация
+
+| Документ | Описание |
+|----------|----------|
+| [Спецификация движка](docs/process-manager-engine.md) | Полная спецификация: архитектура, data model, API design, error handling |
+| [Руководство по интеграции](docs/integration-guide.md) | Интеграция внешних сервисов: RabbitMQ протокол, worker-starter, примеры на Java/Python |
+| [Worker Spring Boot Starter](docs/worker-spring-boot-starter-spec.md) | Спецификация клиентского стартера для worker-сервисов |
+| [Авторизация (Keycloak)](docs/keycloak-authorization.md) | Настройка Keycloak, роли, матрица доступа, realm import |
+| [Call Activity и Timer Events](docs/call-activity.md) | Спецификация доработок: TimerIntermediateCatchEvent, ExclusiveGateway default flow, Call Activity |
+| [План реализации](docs/implementation-plan.md) | Пофазный план реализации проекта |
+| [Валидация процесса (Python)](docs/validate_process.py) | Скрипт проверки выполнения BPMN-процесса по данным из Redis |
 
 ## Лицензия
 

@@ -19,6 +19,12 @@ spring:
         jwt:
           issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/process-engine}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+
 process-engine:
   rabbitmq:
     host: ${PROCESS_ENGINE_RABBITMQ_HOST:localhost}
