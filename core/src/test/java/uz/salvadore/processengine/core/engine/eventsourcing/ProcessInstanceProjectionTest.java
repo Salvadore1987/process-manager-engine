@@ -52,7 +52,7 @@ class ProcessInstanceProjectionTest {
             // which produces an unpredictable ID. To build a coherent sequence, we apply the started event
             // first to discover the token ID, then build the remaining events with that ID.
             ProcessStartedEvent started = new ProcessStartedEvent(
-                    UUID.randomUUID(), processInstanceId, definitionId, null,
+                    UUID.randomUUID(), processInstanceId, definitionId, null, null,
                     Map.of("input", "data"), now, 1L
             );
 
@@ -101,7 +101,7 @@ class ProcessInstanceProjectionTest {
             // Arrange
             UUID processInstanceId = UUID.randomUUID();
             ProcessStartedEvent started = new ProcessStartedEvent(
-                    UUID.randomUUID(), processInstanceId, UUID.randomUUID(), null,
+                    UUID.randomUUID(), processInstanceId, UUID.randomUUID(), null, null,
                     Map.of(), Instant.now(), 1L
             );
 

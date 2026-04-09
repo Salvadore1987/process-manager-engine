@@ -8,12 +8,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import uz.salvadore.processengine.core.port.outgoing.ActivityLog;
+import uz.salvadore.processengine.core.port.outgoing.BusinessKeyMapping;
 import uz.salvadore.processengine.core.port.outgoing.ChildInstanceMapping;
 import uz.salvadore.processengine.core.port.outgoing.InstanceDefinitionMapping;
 import uz.salvadore.processengine.core.port.outgoing.ProcessDefinitionStore;
 import uz.salvadore.processengine.core.port.outgoing.ProcessEventStore;
 import uz.salvadore.processengine.core.port.outgoing.ProcessInstanceLock;
 import uz.salvadore.processengine.core.port.outgoing.SequenceGenerator;
+import uz.salvadore.processengine.redis.RedisBusinessKeyMapping;
 import uz.salvadore.processengine.redis.RedisChildInstanceMapping;
 import uz.salvadore.processengine.redis.RedisEventStore;
 import uz.salvadore.processengine.redis.RedisActivityLog;
@@ -59,6 +61,12 @@ public class RedisPersistenceAutoConfiguration {
     @ConditionalOnMissingBean(ProcessInstanceLock.class)
     public ProcessInstanceLock redisProcessInstanceLock(StringRedisTemplate redisTemplate) {
         return new RedisProcessInstanceLock(redisTemplate);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(BusinessKeyMapping.class)
+    public BusinessKeyMapping redisBusinessKeyMapping(StringRedisTemplate redisTemplate) {
+        return new RedisBusinessKeyMapping(redisTemplate);
     }
 
     @Bean

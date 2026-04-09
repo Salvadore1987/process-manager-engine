@@ -9,17 +9,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.salvadore.processengine.core.domain.model.ProcessInstance;
 import uz.salvadore.processengine.core.engine.ProcessEngine;
-import uz.salvadore.processengine.core.port.outgoing.ProcessEventStore;
-import uz.salvadore.processengine.rest.dto.PageDto;
 import uz.salvadore.processengine.rest.dto.ProcessInstanceDto;
 import uz.salvadore.processengine.rest.dto.StartProcessRequestDto;
 import uz.salvadore.processengine.rest.mapper.ProcessInstanceDtoMapper;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -38,13 +34,19 @@ public class ProcessInstanceController {
     @PostMapping
     public ResponseEntity<ProcessInstanceDto> start(@RequestBody StartProcessRequestDto request) {
         ProcessInstance instance = processEngine.startProcess(
-                request.definitionKey(), request.variables());
+                request.definitionKey(), request.businessKey(), request.variables());
         return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toDto(instance));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ProcessInstanceDto> getById(@PathVariable UUID id) {
         ProcessInstance instance = processEngine.getProcessInstance(id);
+        return ResponseEntity.ok(mapper.toDto(instance));
+    }
+
+    @GetMapping("/by-business-key/{businessKey}")
+    public ResponseEntity<ProcessInstanceDto> getByBusinessKey(@PathVariable String businessKey) {
+        ProcessInstance instance = processEngine.getProcessInstanceByBusinessKey(businessKey);
         return ResponseEntity.ok(mapper.toDto(instance));
     }
 

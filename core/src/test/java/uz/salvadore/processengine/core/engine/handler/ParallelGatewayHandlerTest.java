@@ -62,7 +62,7 @@ class ParallelGatewayHandlerTest {
             Token token = Token.create("fork1");
             UUID processInstanceId = UUID.randomUUID();
             ProcessInstance instance = ProcessInstance.restore(
-                    processInstanceId, definition.getId(), null, ProcessState.RUNNING,
+                    processInstanceId, definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(token), Map.of(), Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -120,7 +120,7 @@ class ParallelGatewayHandlerTest {
 
             Token token = Token.create("fork1");
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(token), Map.of(), Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -159,7 +159,7 @@ class ParallelGatewayHandlerTest {
             // Only 1 token at the gateway but 2 are needed
             Token token = Token.create("join1");
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(token), Map.of(), Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -193,7 +193,7 @@ class ParallelGatewayHandlerTest {
             Token token2 = Token.restore(UUID.randomUUID(), "join1", TokenState.ACTIVE);
             UUID processInstanceId = UUID.randomUUID();
             ProcessInstance instance = ProcessInstance.restore(
-                    processInstanceId, definition.getId(), null, ProcessState.RUNNING,
+                    processInstanceId, definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(token1, token2), Map.of(), Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -240,7 +240,7 @@ class ParallelGatewayHandlerTest {
             Token activeToken = Token.restore(UUID.randomUUID(), "join1", TokenState.ACTIVE);
             Token completedToken = Token.restore(UUID.randomUUID(), "join1", TokenState.COMPLETED);
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(activeToken, completedToken), Map.of(), Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -276,7 +276,7 @@ class ParallelGatewayHandlerTest {
 
         Token token = Token.create("fork1");
         ProcessInstance instance = ProcessInstance.restore(
-                UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token), Map.of(), Instant.now(), null
         );
         ExecutionContext context = new ExecutionContext(instance, definition);

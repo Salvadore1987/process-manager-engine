@@ -44,7 +44,7 @@ class CallActivityHandlerTest {
         Token token = Token.create("call1");
         UUID processInstanceId = UUID.randomUUID();
         ProcessInstance instance = ProcessInstance.restore(
-                processInstanceId, definition.getId(), null, ProcessState.RUNNING,
+                processInstanceId, definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token), Map.of(), Instant.now(), null
         );
         ExecutionContext context = new ExecutionContext(instance, definition);
@@ -82,11 +82,11 @@ class CallActivityHandlerTest {
         Token token1 = Token.create("call1");
         Token token2 = Token.create("call1");
         ProcessInstance instance1 = ProcessInstance.restore(
-                UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token1), Map.of(), Instant.now(), null
         );
         ProcessInstance instance2 = ProcessInstance.restore(
-                UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token2), Map.of(), Instant.now(), null
         );
 

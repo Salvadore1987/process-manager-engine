@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryActivityLog;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryBusinessKeyMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryEventStore;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryInstanceDefinitionMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessDefinitionStore;
@@ -103,7 +104,7 @@ class ChargePaymentSubprocessE2ETest {
 
         TokenExecutor tokenExecutor = new TokenExecutor(handlers);
         engine = new ProcessEngine(eventStore, definitionStore, tokenExecutor, sequenceGenerator,
-                new InMemoryInstanceDefinitionMapping(), new InMemoryProcessInstanceLock(), new InMemoryActivityLog());
+                new InMemoryInstanceDefinitionMapping(), new InMemoryProcessInstanceLock(), new InMemoryBusinessKeyMapping(), new InMemoryActivityLog());
 
         // Parse and deploy the real BPMN file
         BpmnParser parser = new BpmnParser();
@@ -122,7 +123,7 @@ class ChargePaymentSubprocessE2ETest {
         @DisplayName("Start -> charge-payment -> isPaymentSuccess=true -> EndEvent = COMPLETED")
         void shouldCompleteOnDirectPaymentSuccess() {
             // Arrange
-            ProcessInstance started = engine.startProcess("charge-payment-subprocess", Map.of());
+            ProcessInstance started = engine.startProcess("charge-payment-subprocess", "test-biz-key", Map.of());
             assertThat(started.getState()).isEqualTo(ProcessState.RUNNING);
 
             // Token should be at charge-payment (WAITING for external worker)
@@ -147,7 +148,7 @@ class ChargePaymentSubprocessE2ETest {
         @DisplayName("charge(false) -> default(check-status) -> isPaymentSuccess=true -> EndEvent = COMPLETED")
         void shouldCompleteAfterStatusCheck() {
             // Arrange
-            ProcessInstance started = engine.startProcess("charge-payment-subprocess", Map.of());
+            ProcessInstance started = engine.startProcess("charge-payment-subprocess", "test-biz-key", Map.of());
             Token chargeToken = findWaitingToken(started);
             assertThat(chargeToken.getCurrentNodeId()).isEqualTo("charge-payment");
 
@@ -178,7 +179,7 @@ class ChargePaymentSubprocessE2ETest {
         @DisplayName("charge(false) -> check-status(false) -> timer(WAITING) -> completeTimer -> charge(true) = COMPLETED")
         void shouldRetryViaTimerAndComplete() {
             // Arrange — start process
-            ProcessInstance started = engine.startProcess("charge-payment-subprocess", Map.of());
+            ProcessInstance started = engine.startProcess("charge-payment-subprocess", "test-biz-key", Map.of());
             Token chargeToken = findWaitingToken(started);
             assertThat(chargeToken.getCurrentNodeId()).isEqualTo("charge-payment");
 

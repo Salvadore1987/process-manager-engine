@@ -47,7 +47,7 @@ class EventApplierTest {
             UUID definitionId = UUID.randomUUID();
             Map<String, Object> variables = Map.of("key", "value");
             ProcessStartedEvent event = new ProcessStartedEvent(
-                    UUID.randomUUID(), processInstanceId, definitionId, null, variables, Instant.now(), 1L
+                    UUID.randomUUID(), processInstanceId, definitionId, null, null, variables, Instant.now(), 1L
             );
 
             // Act
@@ -70,7 +70,7 @@ class EventApplierTest {
         void shouldHandleNullVariables() {
             // Arrange
             ProcessStartedEvent event = new ProcessStartedEvent(
-                    UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null, null, Instant.now(), 1L
+                    UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null, null, null, Instant.now(), 1L
             );
 
             // Act
@@ -86,7 +86,7 @@ class EventApplierTest {
             // Arrange
             UUID parentId = UUID.randomUUID();
             ProcessStartedEvent event = new ProcessStartedEvent(
-                    UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), parentId, Map.of(), Instant.now(), 1L
+                    UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), parentId, null, Map.of(), Instant.now(), 1L
             );
 
             // Act
@@ -127,7 +127,7 @@ class EventApplierTest {
             Token token1 = Token.create("node1");
             Token token2 = Token.create("node2");
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), UUID.randomUUID(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), UUID.randomUUID(), null, null, ProcessState.RUNNING,
                     List.of(token1, token2), Map.of(), Instant.now(), null
             );
             TokenMovedEvent event = new TokenMovedEvent(
@@ -191,7 +191,7 @@ class EventApplierTest {
             // Arrange
             UUID processInstanceId = UUID.randomUUID();
             ProcessStartedEvent startEvent = new ProcessStartedEvent(
-                    UUID.randomUUID(), processInstanceId, UUID.randomUUID(), null,
+                    UUID.randomUUID(), processInstanceId, UUID.randomUUID(), null, null,
                     Map.of("existing", "value"), Instant.now(), 1L
             );
             ProcessInstance instance = eventApplier.apply(startEvent, null);
@@ -359,7 +359,7 @@ class EventApplierTest {
      */
     private ProcessInstance createRunningInstance() {
         ProcessStartedEvent event = new ProcessStartedEvent(
-                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null,
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null, null,
                 Map.of(), Instant.now(), 1L
         );
         return eventApplier.apply(event, null);

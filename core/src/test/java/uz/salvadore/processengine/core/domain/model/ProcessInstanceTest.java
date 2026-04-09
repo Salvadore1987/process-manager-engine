@@ -17,7 +17,7 @@ class ProcessInstanceTest {
         java.util.UUID defId = UUIDv7.generate();
 
         // Act
-        ProcessInstance instance = ProcessInstance.create(defId, Map.of("key", "value"));
+        ProcessInstance instance = ProcessInstance.create(defId, "test-biz-key", Map.of("key", "value"));
 
         // Assert
         assertThat(instance.getId()).isNotNull();
@@ -46,7 +46,7 @@ class ProcessInstanceTest {
     @Test
     void shouldSuspendRunningInstance() {
         // Arrange
-        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), Map.of());
+        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), "test-biz-key", Map.of());
 
         // Act
         ProcessInstance suspended = instance.suspend();
@@ -58,7 +58,7 @@ class ProcessInstanceTest {
     @Test
     void shouldResumeAfterSuspend() {
         // Arrange
-        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), Map.of()).suspend();
+        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), "test-biz-key", Map.of()).suspend();
 
         // Act
         ProcessInstance resumed = instance.resume();
@@ -70,7 +70,7 @@ class ProcessInstanceTest {
     @Test
     void shouldCompleteRunningInstance() {
         // Arrange
-        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), Map.of());
+        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), "test-biz-key", Map.of());
 
         // Act
         ProcessInstance completed = instance.complete();
@@ -83,7 +83,7 @@ class ProcessInstanceTest {
     @Test
     void shouldSetErrorOnRunningInstance() {
         // Arrange
-        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), Map.of());
+        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), "test-biz-key", Map.of());
 
         // Act
         ProcessInstance errored = instance.error();
@@ -96,7 +96,7 @@ class ProcessInstanceTest {
     @Test
     void shouldTerminateRunningInstance() {
         // Arrange
-        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), Map.of());
+        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), "test-biz-key", Map.of());
 
         // Act
         ProcessInstance terminated = instance.terminate();
@@ -108,7 +108,7 @@ class ProcessInstanceTest {
     @Test
     void shouldTerminateSuspendedInstance() {
         // Arrange
-        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), Map.of()).suspend();
+        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), "test-biz-key", Map.of()).suspend();
 
         // Act
         ProcessInstance terminated = instance.terminate();
@@ -120,7 +120,7 @@ class ProcessInstanceTest {
     @Test
     void shouldNotSuspendCompletedInstance() {
         // Arrange
-        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), Map.of()).complete();
+        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), "test-biz-key", Map.of()).complete();
 
         // Act & Assert
         assertThatThrownBy(instance::suspend)
@@ -130,7 +130,7 @@ class ProcessInstanceTest {
     @Test
     void shouldNotResumeRunningInstance() {
         // Arrange
-        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), Map.of());
+        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), "test-biz-key", Map.of());
 
         // Act & Assert
         assertThatThrownBy(instance::resume)
@@ -140,7 +140,7 @@ class ProcessInstanceTest {
     @Test
     void shouldNotTerminateCompletedInstance() {
         // Arrange
-        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), Map.of()).complete();
+        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), "test-biz-key", Map.of()).complete();
 
         // Act & Assert
         assertThatThrownBy(instance::terminate)
@@ -150,7 +150,7 @@ class ProcessInstanceTest {
     @Test
     void shouldNotCompleteErroredInstance() {
         // Arrange
-        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), Map.of()).error();
+        ProcessInstance instance = ProcessInstance.create(UUIDv7.generate(), "test-biz-key", Map.of()).error();
 
         // Act & Assert
         assertThatThrownBy(instance::complete)

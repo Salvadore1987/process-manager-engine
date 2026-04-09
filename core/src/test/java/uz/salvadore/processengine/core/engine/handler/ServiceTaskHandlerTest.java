@@ -62,7 +62,7 @@ class ServiceTaskHandlerTest {
         Token token = Token.create("task1");
         Map<String, Object> variables = Map.of("orderId", "ORD-123", "amount", 5000L);
         ProcessInstance instance = ProcessInstance.restore(
-                UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token), variables, Instant.now(), null
         );
         ExecutionContext context = new ExecutionContext(instance, definition);
@@ -97,7 +97,7 @@ class ServiceTaskHandlerTest {
 
         Token token = Token.create("task1");
         ProcessInstance instance = ProcessInstance.restore(
-                UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token), Map.of(), Instant.now(), null
         );
         ExecutionContext context = new ExecutionContext(instance, definition);
@@ -125,7 +125,7 @@ class ServiceTaskHandlerTest {
 
         Token token = Token.create("task1");
         ProcessInstance instance = ProcessInstance.restore(
-                UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token), Map.of(), Instant.now(), null
         );
         ExecutionContext context = new ExecutionContext(instance, definition);

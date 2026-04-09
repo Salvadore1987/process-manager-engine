@@ -61,7 +61,7 @@ class ProcessInstanceControllerTest {
 
     private ProcessInstance createTestInstance() {
         UUID definitionId = UUID.randomUUID();
-        return ProcessInstance.create(definitionId, Map.of("orderId", "12345"));
+        return ProcessInstance.create(definitionId, "test-biz-key", Map.of("orderId", "12345"));
     }
 
     @Test
@@ -69,9 +69,9 @@ class ProcessInstanceControllerTest {
         // Arrange
         ProcessInstance instance = createTestInstance();
         StartProcessRequestDto request = new StartProcessRequestDto(
-                "order-processing", Map.of("orderId", "12345"));
+                "order-processing", "test-biz-key", Map.of("orderId", "12345"));
 
-        when(processEngine.startProcess(eq("order-processing"), anyMap())).thenReturn(instance);
+        when(processEngine.startProcess(eq("order-processing"), anyString(), anyMap())).thenReturn(instance);
 
         // Act & Assert
         mockMvc.perform(post("/api/v1/instances")

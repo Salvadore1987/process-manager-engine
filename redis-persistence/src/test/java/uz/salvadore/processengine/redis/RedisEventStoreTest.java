@@ -40,6 +40,7 @@ class RedisEventStoreTest extends AbstractRedisTest {
                     processInstanceId,
                     UUIDv7.generate(),
                     null,
+                    null,
                     Map.of("key", "value"),
                     Instant.now(),
                     1L
@@ -71,6 +72,7 @@ class RedisEventStoreTest extends AbstractRedisTest {
                     UUIDv7.generate(),
                     processInstanceId,
                     UUIDv7.generate(),
+                    null,
                     null,
                     Map.of(),
                     Instant.now(),
@@ -143,6 +145,7 @@ class RedisEventStoreTest extends AbstractRedisTest {
                     UUIDv7.generate(),
                     processInstanceId,
                     UUIDv7.generate(),
+                    null,
                     null,
                     Map.of(),
                     Instant.now(),

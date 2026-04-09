@@ -15,6 +15,7 @@ public final class ProcessInstance {
     private final UUID id;
     private final UUID definitionId;
     private final UUID parentProcessInstanceId;
+    private final String businessKey;
     private final ProcessState state;
     private final List<Token> tokens;
     private final Map<String, Object> variables;
@@ -22,11 +23,12 @@ public final class ProcessInstance {
     private final Instant completedAt;
 
     private ProcessInstance(UUID id, UUID definitionId, UUID parentProcessInstanceId,
-                            ProcessState state, List<Token> tokens, Map<String, Object> variables,
-                            Instant startedAt, Instant completedAt) {
+                            String businessKey, ProcessState state, List<Token> tokens,
+                            Map<String, Object> variables, Instant startedAt, Instant completedAt) {
         this.id = id;
         this.definitionId = definitionId;
         this.parentProcessInstanceId = parentProcessInstanceId;
+        this.businessKey = businessKey;
         this.state = state;
         this.tokens = List.copyOf(tokens);
         this.variables = Map.copyOf(variables);
@@ -34,32 +36,33 @@ public final class ProcessInstance {
         this.completedAt = completedAt;
     }
 
-    public static ProcessInstance create(UUID definitionId, Map<String, Object> variables) {
-        return new ProcessInstance(UUIDv7.generate(), definitionId, null,
+    public static ProcessInstance create(UUID definitionId, String businessKey,
+                                         Map<String, Object> variables) {
+        return new ProcessInstance(UUIDv7.generate(), definitionId, null, businessKey,
                 ProcessState.RUNNING, List.of(), variables, Instant.now(), null);
     }
 
     public static ProcessInstance createChild(UUID definitionId, UUID parentProcessInstanceId,
                                               Map<String, Object> variables) {
-        return new ProcessInstance(UUIDv7.generate(), definitionId, parentProcessInstanceId,
+        return new ProcessInstance(UUIDv7.generate(), definitionId, parentProcessInstanceId, null,
                 ProcessState.RUNNING, List.of(), variables, Instant.now(), null);
     }
 
     public static ProcessInstance restore(UUID id, UUID definitionId, UUID parentProcessInstanceId,
-                                          ProcessState state, List<Token> tokens,
+                                          String businessKey, ProcessState state, List<Token> tokens,
                                           Map<String, Object> variables,
                                           Instant startedAt, Instant completedAt) {
-        return new ProcessInstance(id, definitionId, parentProcessInstanceId, state,
+        return new ProcessInstance(id, definitionId, parentProcessInstanceId, businessKey, state,
                 tokens, variables, startedAt, completedAt);
     }
 
     public ProcessInstance withTokens(List<Token> newTokens) {
-        return new ProcessInstance(id, definitionId, parentProcessInstanceId, state,
+        return new ProcessInstance(id, definitionId, parentProcessInstanceId, businessKey, state,
                 newTokens, variables, startedAt, completedAt);
     }
 
     public ProcessInstance withVariables(Map<String, Object> newVariables) {
-        return new ProcessInstance(id, definitionId, parentProcessInstanceId, state,
+        return new ProcessInstance(id, definitionId, parentProcessInstanceId, businessKey, state,
                 tokens, newVariables, startedAt, completedAt);
     }
 
@@ -67,7 +70,7 @@ public final class ProcessInstance {
         if (state != ProcessState.RUNNING) {
             throw new IllegalStateException("Cannot suspend process in state " + state);
         }
-        return new ProcessInstance(id, definitionId, parentProcessInstanceId,
+        return new ProcessInstance(id, definitionId, parentProcessInstanceId, businessKey,
                 ProcessState.SUSPENDED, tokens, variables, startedAt, completedAt);
     }
 
@@ -75,7 +78,7 @@ public final class ProcessInstance {
         if (state != ProcessState.SUSPENDED) {
             throw new IllegalStateException("Cannot resume process in state " + state);
         }
-        return new ProcessInstance(id, definitionId, parentProcessInstanceId,
+        return new ProcessInstance(id, definitionId, parentProcessInstanceId, businessKey,
                 ProcessState.RUNNING, tokens, variables, startedAt, completedAt);
     }
 
@@ -83,7 +86,7 @@ public final class ProcessInstance {
         if (state != ProcessState.RUNNING) {
             throw new IllegalStateException("Cannot complete process in state " + state);
         }
-        return new ProcessInstance(id, definitionId, parentProcessInstanceId,
+        return new ProcessInstance(id, definitionId, parentProcessInstanceId, businessKey,
                 ProcessState.COMPLETED, tokens, variables, startedAt, Instant.now());
     }
 
@@ -91,7 +94,7 @@ public final class ProcessInstance {
         if (state != ProcessState.RUNNING) {
             throw new IllegalStateException("Cannot set error on process in state " + state);
         }
-        return new ProcessInstance(id, definitionId, parentProcessInstanceId,
+        return new ProcessInstance(id, definitionId, parentProcessInstanceId, businessKey,
                 ProcessState.ERROR, tokens, variables, startedAt, Instant.now());
     }
 
@@ -99,7 +102,7 @@ public final class ProcessInstance {
         if (state == ProcessState.COMPLETED || state == ProcessState.TERMINATED) {
             throw new IllegalStateException("Cannot terminate process in state " + state);
         }
-        return new ProcessInstance(id, definitionId, parentProcessInstanceId,
+        return new ProcessInstance(id, definitionId, parentProcessInstanceId, businessKey,
                 ProcessState.TERMINATED, tokens, variables, startedAt, Instant.now());
     }
 
@@ -113,6 +116,10 @@ public final class ProcessInstance {
 
     public UUID getParentProcessInstanceId() {
         return parentProcessInstanceId;
+    }
+
+    public String getBusinessKey() {
+        return businessKey;
     }
 
     public ProcessState getState() {

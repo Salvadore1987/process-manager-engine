@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryActivityLog;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryBusinessKeyMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryChildInstanceMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryEventStore;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryInstanceDefinitionMapping;
@@ -112,7 +113,7 @@ class CallActivityE2ETest {
 
         TokenExecutor tokenExecutor = new TokenExecutor(handlers);
         engine = new ProcessEngine(eventStore, definitionStore, tokenExecutor, sequenceGenerator,
-                instanceDefinitionMapping, childInstanceMapping,
+                instanceDefinitionMapping, childInstanceMapping, new InMemoryBusinessKeyMapping(),
                 new InMemoryProcessInstanceLock(), new InMemoryActivityLog(), List.of());
 
         // Deploy bundle: order-process + charge-payment-subprocess
@@ -135,7 +136,7 @@ class CallActivityE2ETest {
         @DisplayName("order-process → validate → parallel(book+notify) → charge-payment(CallActivity) → deliver → end")
         void shouldCompleteFullOrderWithCallActivity() {
             // Arrange & Act — Start order process
-            ProcessInstance orderInstance = engine.startProcess("order-process", Map.of());
+            ProcessInstance orderInstance = engine.startProcess("order-process", "test-biz-key", Map.of());
             assertThat(orderInstance.getState()).isEqualTo(ProcessState.RUNNING);
 
             // Step 1: Complete validate-order
@@ -193,7 +194,7 @@ class CallActivityE2ETest {
             // So child error should trigger compensation path
 
             // Start and advance to call activity
-            ProcessInstance orderInstance = engine.startProcess("order-process", Map.of());
+            ProcessInstance orderInstance = engine.startProcess("order-process", "test-biz-key", Map.of());
             RecordingMessageTransport.SendCall validateCall = findSendCall("order.validate");
             engine.completeTask(validateCall.correlationId(), Map.of());
 
@@ -234,7 +235,7 @@ class CallActivityE2ETest {
         @DisplayName("charge(false) → check-status(false) → timer → charge(true) → end → parent continues")
         void shouldHandleRetryLoopInSubprocess() {
             // Start and advance to call activity
-            ProcessInstance orderInstance = engine.startProcess("order-process", Map.of());
+            ProcessInstance orderInstance = engine.startProcess("order-process", "test-biz-key", Map.of());
             RecordingMessageTransport.SendCall validateCall = findSendCall("order.validate");
             engine.completeTask(validateCall.correlationId(), Map.of());
 

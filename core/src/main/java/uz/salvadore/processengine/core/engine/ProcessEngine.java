@@ -32,6 +32,7 @@ import uz.salvadore.processengine.core.engine.eventsourcing.EventApplier;
 import uz.salvadore.processengine.core.engine.eventsourcing.ProcessInstanceProjection;
 import uz.salvadore.processengine.core.parser.BpmnParser;
 import uz.salvadore.processengine.core.port.outgoing.ActivityLog;
+import uz.salvadore.processengine.core.port.outgoing.BusinessKeyMapping;
 import uz.salvadore.processengine.core.port.outgoing.ChildInstanceMapping;
 import uz.salvadore.processengine.core.port.outgoing.DeploymentListener;
 import uz.salvadore.processengine.core.port.outgoing.InstanceDefinitionMapping;
@@ -61,6 +62,7 @@ public final class ProcessEngine {
     private final SequenceGenerator sequenceGenerator;
     private final InstanceDefinitionMapping instanceDefinitionMapping;
     private final ChildInstanceMapping childInstanceMapping;
+    private final BusinessKeyMapping businessKeyMapping;
     private final ProcessInstanceLock processInstanceLock;
     private final ActivityLog activityLog;
     private final EventApplier eventApplier;
@@ -74,9 +76,10 @@ public final class ProcessEngine {
                          SequenceGenerator sequenceGenerator,
                          InstanceDefinitionMapping instanceDefinitionMapping,
                          ProcessInstanceLock processInstanceLock,
+                         BusinessKeyMapping businessKeyMapping,
                          ActivityLog activityLog) {
         this(eventStore, definitionStore, tokenExecutor, sequenceGenerator,
-                instanceDefinitionMapping, null, processInstanceLock, activityLog, List.of());
+                instanceDefinitionMapping, null, businessKeyMapping, processInstanceLock, activityLog, List.of());
     }
 
     public ProcessEngine(ProcessEventStore eventStore,
@@ -85,10 +88,11 @@ public final class ProcessEngine {
                          SequenceGenerator sequenceGenerator,
                          InstanceDefinitionMapping instanceDefinitionMapping,
                          ProcessInstanceLock processInstanceLock,
+                         BusinessKeyMapping businessKeyMapping,
                          ActivityLog activityLog,
                          List<DeploymentListener> deploymentListeners) {
         this(eventStore, definitionStore, tokenExecutor, sequenceGenerator,
-                instanceDefinitionMapping, null, processInstanceLock, activityLog, deploymentListeners);
+                instanceDefinitionMapping, null, businessKeyMapping, processInstanceLock, activityLog, deploymentListeners);
     }
 
     public ProcessEngine(ProcessEventStore eventStore,
@@ -97,6 +101,7 @@ public final class ProcessEngine {
                          SequenceGenerator sequenceGenerator,
                          InstanceDefinitionMapping instanceDefinitionMapping,
                          ChildInstanceMapping childInstanceMapping,
+                         BusinessKeyMapping businessKeyMapping,
                          ProcessInstanceLock processInstanceLock,
                          ActivityLog activityLog,
                          List<DeploymentListener> deploymentListeners) {
@@ -106,6 +111,7 @@ public final class ProcessEngine {
         this.sequenceGenerator = sequenceGenerator;
         this.instanceDefinitionMapping = instanceDefinitionMapping;
         this.childInstanceMapping = childInstanceMapping;
+        this.businessKeyMapping = businessKeyMapping;
         this.processInstanceLock = processInstanceLock;
         this.activityLog = activityLog;
         this.eventApplier = new EventApplier();
@@ -163,7 +169,15 @@ public final class ProcessEngine {
         return deployedDefinitions;
     }
 
-    public ProcessInstance startProcess(String definitionKey, Map<String, Object> variables) {
+    public ProcessInstance startProcess(String definitionKey, String businessKey,
+                                        Map<String, Object> variables) {
+        if (businessKey == null || businessKey.isBlank()) {
+            throw new IllegalArgumentException("Business key must not be null or blank");
+        }
+        if (businessKeyMapping.get(businessKey) != null) {
+            throw new IllegalArgumentException("Business key already in use: " + businessKey);
+        }
+
         ProcessDefinition definition = definitionStore.getByKey(definitionKey)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Process definition not found: " + definitionKey));
@@ -176,6 +190,7 @@ public final class ProcessEngine {
                 processInstanceId,
                 definition.getId(),
                 null,
+                businessKey,
                 processVariables,
                 Instant.now(),
                 sequenceGenerator.next(processInstanceId)
@@ -186,6 +201,7 @@ public final class ProcessEngine {
 
         ProcessInstance instance = eventApplier.apply(startedEvent, null);
         instanceDefinitionMapping.put(processInstanceId, definition.getId());
+        businessKeyMapping.put(businessKey, processInstanceId);
 
         Token startToken = instance.getTokens().getFirst();
         FlowNode startNode = findStartEvent(definition);
@@ -202,6 +218,15 @@ public final class ProcessEngine {
 
         eventStore.appendAll(allEvents);
         return instance;
+    }
+
+    public ProcessInstance getProcessInstanceByBusinessKey(String businessKey) {
+        UUID processInstanceId = businessKeyMapping.get(businessKey);
+        if (processInstanceId == null) {
+            throw new IllegalStateException(
+                    "Process instance not found for business key: " + businessKey);
+        }
+        return getProcessInstance(processInstanceId);
     }
 
     public ProcessInstance completeTask(UUID correlationId, Map<String, Object> result) {
@@ -646,6 +671,7 @@ public final class ProcessEngine {
                 childProcessInstanceId,
                 childDefinition.getId(),
                 parentInstance.getId(),
+                null,
                 childVariables,
                 Instant.now(),
                 sequenceGenerator.next(childProcessInstanceId)

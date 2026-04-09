@@ -9,6 +9,7 @@ public record ProcessStartedEvent(
         UUID processInstanceId,
         UUID definitionId,
         UUID parentProcessInstanceId,
+        String businessKey,
         Map<String, Object> variables,
         Instant occurredAt,
         long sequenceNumber

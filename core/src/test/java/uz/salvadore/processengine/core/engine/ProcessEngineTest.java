@@ -25,6 +25,7 @@ import uz.salvadore.processengine.core.engine.condition.SimpleConditionEvaluator
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryInstanceDefinitionMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessDefinitionStore;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryActivityLog;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryBusinessKeyMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessInstanceLock;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemorySequenceGenerator;
 import uz.salvadore.processengine.core.engine.handler.CallActivityHandler;
@@ -94,7 +95,7 @@ class ProcessEngineTest {
         );
 
         TokenExecutor tokenExecutor = new TokenExecutor(handlers);
-        engine = new ProcessEngine(eventStore, definitionStore, tokenExecutor, sequenceGenerator, new InMemoryInstanceDefinitionMapping(), new InMemoryProcessInstanceLock(), new InMemoryActivityLog());
+        engine = new ProcessEngine(eventStore, definitionStore, tokenExecutor, sequenceGenerator, new InMemoryInstanceDefinitionMapping(), new InMemoryProcessInstanceLock(), new InMemoryBusinessKeyMapping(), new InMemoryActivityLog());
     }
 
     private ProcessDefinition createSimpleLinearProcess() {
@@ -160,7 +161,7 @@ class ProcessEngineTest {
             engine.deploy(definition);
 
             // Act
-            ProcessInstance instance = engine.startProcess("simple-process", Map.of("key", "value"));
+            ProcessInstance instance = engine.startProcess("simple-process", "test-biz-key", Map.of("key", "value"));
 
             // Assert
             assertThat(instance).isNotNull();
@@ -180,7 +181,7 @@ class ProcessEngineTest {
             engine.deploy(definition);
 
             // Act
-            engine.startProcess("simple-process", Map.of("orderId", "ORD-001"));
+            engine.startProcess("simple-process", "biz-ord-001", Map.of("orderId", "ORD-001"));
 
             // Assert
             assertThat(messageTransport.sendCalls).hasSize(1);
@@ -191,7 +192,7 @@ class ProcessEngineTest {
         @DisplayName("Should throw when definition not found")
         void shouldThrowWhenDefinitionNotFound() {
             // Act & Assert
-            assertThatThrownBy(() -> engine.startProcess("non-existent", Map.of()))
+            assertThatThrownBy(() -> engine.startProcess("non-existent", "test-biz-key", Map.of()))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Process definition not found");
         }
@@ -204,7 +205,7 @@ class ProcessEngineTest {
             engine.deploy(definition);
 
             // Act
-            ProcessInstance instance = engine.startProcess("simple-process", null);
+            ProcessInstance instance = engine.startProcess("simple-process", "test-biz-key", null);
 
             // Assert
             assertThat(instance).isNotNull();
@@ -219,7 +220,7 @@ class ProcessEngineTest {
             engine.deploy(definition);
 
             // Act
-            ProcessInstance instance = engine.startProcess("simple-process", Map.of());
+            ProcessInstance instance = engine.startProcess("simple-process", "test-biz-key", Map.of());
 
             // Assert
             List<ProcessEvent> storedEvents = eventStore.getEvents(instance.getId());
@@ -239,7 +240,7 @@ class ProcessEngineTest {
             // Arrange
             ProcessDefinition definition = createSimpleLinearProcess();
             engine.deploy(definition);
-            ProcessInstance started = engine.startProcess("simple-process", Map.of());
+            ProcessInstance started = engine.startProcess("simple-process", "test-biz-key", Map.of());
 
             // Find the waiting token
             Token waitingToken = started.getTokens().stream()
@@ -260,7 +261,7 @@ class ProcessEngineTest {
             // Arrange
             ProcessDefinition definition = createSimpleLinearProcess();
             engine.deploy(definition);
-            ProcessInstance started = engine.startProcess("simple-process", Map.of("initial", "data"));
+            ProcessInstance started = engine.startProcess("simple-process", "test-biz-key", Map.of("initial", "data"));
 
             Token waitingToken = started.getTokens().stream()
                     .filter(t -> t.getState() == TokenState.ACTIVE || t.getState() == TokenState.WAITING)
@@ -281,7 +282,7 @@ class ProcessEngineTest {
             // Arrange
             ProcessDefinition definition = createSimpleLinearProcess();
             engine.deploy(definition);
-            engine.startProcess("simple-process", Map.of());
+            engine.startProcess("simple-process", "test-biz-key", Map.of());
 
             // Act & Assert
             assertThatThrownBy(() -> engine.completeTask(UUID.randomUUID(), Map.of()))
@@ -308,7 +309,7 @@ class ProcessEngineTest {
                     List.of(startEvent, callActivity, endEvent), List.of(flow1, flow2));
             engine.deploy(definition);
 
-            ProcessInstance started = engine.startProcess("call-process", Map.of());
+            ProcessInstance started = engine.startProcess("call-process", "test-biz-key", Map.of());
             // After start, token should be at CallActivity (WAITING via CallActivityStartedEvent)
 
             // Act
@@ -339,7 +340,7 @@ class ProcessEngineTest {
             // Arrange
             ProcessDefinition definition = createSimpleLinearProcess();
             engine.deploy(definition);
-            ProcessInstance started = engine.startProcess("simple-process", Map.of());
+            ProcessInstance started = engine.startProcess("simple-process", "test-biz-key", Map.of());
 
             // Act
             ProcessInstance suspended = engine.suspendProcess(started.getId());
@@ -354,7 +355,7 @@ class ProcessEngineTest {
             // Arrange
             ProcessDefinition definition = createSimpleLinearProcess();
             engine.deploy(definition);
-            ProcessInstance started = engine.startProcess("simple-process", Map.of());
+            ProcessInstance started = engine.startProcess("simple-process", "test-biz-key", Map.of());
             engine.suspendProcess(started.getId());
 
             // Act
@@ -370,7 +371,7 @@ class ProcessEngineTest {
             // Arrange
             ProcessDefinition definition = createSimpleLinearProcess();
             engine.deploy(definition);
-            ProcessInstance started = engine.startProcess("simple-process", Map.of());
+            ProcessInstance started = engine.startProcess("simple-process", "test-biz-key", Map.of());
             engine.suspendProcess(started.getId());
 
             // Act & Assert
@@ -385,7 +386,7 @@ class ProcessEngineTest {
             // Arrange
             ProcessDefinition definition = createSimpleLinearProcess();
             engine.deploy(definition);
-            ProcessInstance started = engine.startProcess("simple-process", Map.of());
+            ProcessInstance started = engine.startProcess("simple-process", "test-biz-key", Map.of());
 
             // Act & Assert
             assertThatThrownBy(() -> engine.resumeProcess(started.getId()))
@@ -404,7 +405,7 @@ class ProcessEngineTest {
             // Arrange
             ProcessDefinition definition = createSimpleLinearProcess();
             engine.deploy(definition);
-            ProcessInstance started = engine.startProcess("simple-process", Map.of());
+            ProcessInstance started = engine.startProcess("simple-process", "test-biz-key", Map.of());
 
             // Act
             ProcessInstance terminated = engine.terminateProcess(started.getId());
@@ -419,7 +420,7 @@ class ProcessEngineTest {
             // Arrange
             ProcessDefinition definition = createSimpleLinearProcess();
             engine.deploy(definition);
-            ProcessInstance started = engine.startProcess("simple-process", Map.of());
+            ProcessInstance started = engine.startProcess("simple-process", "test-biz-key", Map.of());
 
             Token waitingToken = started.getTokens().stream()
                     .filter(t -> t.getState() == TokenState.ACTIVE || t.getState() == TokenState.WAITING)
@@ -443,7 +444,7 @@ class ProcessEngineTest {
             // Arrange
             ProcessDefinition definition = createSimpleLinearProcess();
             engine.deploy(definition);
-            ProcessInstance started = engine.startProcess("simple-process", Map.of("x", 42));
+            ProcessInstance started = engine.startProcess("simple-process", "test-biz-key", Map.of("x", 42));
 
             // Act
             ProcessInstance rebuilt = engine.getProcessInstance(started.getId());
@@ -498,7 +499,7 @@ class ProcessEngineTest {
                     List.of(flow1, flow2, flowErr1, flowErr2));
             engine.deploy(definition);
 
-            ProcessInstance started = engine.startProcess("error-boundary-process", Map.of());
+            ProcessInstance started = engine.startProcess("error-boundary-process", "test-biz-key", Map.of());
             Token waitingToken = started.getTokens().stream()
                     .filter(t -> t.getState() == TokenState.WAITING)
                     .findFirst()
@@ -547,7 +548,7 @@ class ProcessEngineTest {
             engine.deploy(definition);
 
             // Start process — token arrives at task1 (WAITING)
-            ProcessInstance started = engine.startProcess("compensation-process", Map.of());
+            ProcessInstance started = engine.startProcess("compensation-process", "test-biz-key", Map.of());
             Token waitingTask1 = started.getTokens().stream()
                     .filter(t -> t.getState() == TokenState.WAITING)
                     .findFirst()
@@ -594,7 +595,7 @@ class ProcessEngineTest {
             ProcessDefinition definition = createSimpleLinearProcess();
             engine.deploy(definition);
 
-            ProcessInstance started = engine.startProcess("simple-process", Map.of());
+            ProcessInstance started = engine.startProcess("simple-process", "test-biz-key", Map.of());
             Token waitingToken = started.getTokens().stream()
                     .filter(t -> t.getState() == TokenState.WAITING)
                     .findFirst()

@@ -50,7 +50,7 @@ class EndEventHandlerTest {
             EndEvent endEvent = new EndEvent("end1", "End", List.of("flow1"), List.of(), null);
             Token token = Token.create("end1");
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(token), Map.of(), Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -76,7 +76,7 @@ class EndEventHandlerTest {
             Token activeToken = Token.create("end1");
             Token completedToken = Token.restore(UUID.randomUUID(), "task1", TokenState.COMPLETED);
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(activeToken, completedToken), Map.of(), Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -99,7 +99,7 @@ class EndEventHandlerTest {
             Token activeToken = Token.create("end1");
             Token otherActiveToken = Token.create("task1");
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(activeToken, otherActiveToken), Map.of(), Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -121,7 +121,7 @@ class EndEventHandlerTest {
             Token activeToken = Token.create("end1");
             Token waitingToken = Token.restore(UUID.randomUUID(), "task2", TokenState.WAITING);
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(activeToken, waitingToken), Map.of(), Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -142,7 +142,7 @@ class EndEventHandlerTest {
             EndEvent endEvent = new EndEvent("end1", "End", List.of("flow1"), List.of(), null);
             Token token = Token.create("end1");
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(token), Map.of(), Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -172,7 +172,7 @@ class EndEventHandlerTest {
 
             Token token = Token.create("end1");
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(token), Map.of(), Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -203,7 +203,7 @@ class EndEventHandlerTest {
             Token token = Token.create("end1");
             // Single token scenario - normally would also emit ProcessCompletedEvent
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(token), Map.of(), Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);

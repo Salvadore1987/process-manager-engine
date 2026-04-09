@@ -8,6 +8,7 @@ public record ProcessInstanceDto(
         UUID id,
         UUID definitionId,
         UUID parentProcessInstanceId,
+        String businessKey,
         String state,
         Map<String, Object> variables,
         Instant startedAt,

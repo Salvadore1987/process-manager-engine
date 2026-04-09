@@ -57,7 +57,7 @@ class HistoryControllerTest {
         Instant occurredAt = Instant.parse("2026-03-29T10:00:00Z");
 
         ProcessStartedEvent startedEvent = new ProcessStartedEvent(
-                eventId, processInstanceId, UUID.randomUUID(), null,
+                eventId, processInstanceId, UUID.randomUUID(), null, null,
                 Map.of("key", "value"), occurredAt, 1L);
 
         when(processEventStore.getEvents(processInstanceId)).thenReturn(List.of(startedEvent));
@@ -123,7 +123,7 @@ class HistoryControllerTest {
         // Arrange
         UUID processInstanceId = UUID.randomUUID();
         ProcessStartedEvent startedEvent = new ProcessStartedEvent(
-                UUID.randomUUID(), processInstanceId, UUID.randomUUID(), null,
+                UUID.randomUUID(), processInstanceId, UUID.randomUUID(), null, null,
                 Map.of(), Instant.now(), 1L);
 
         when(processEventStore.getEvents(processInstanceId)).thenReturn(List.of(startedEvent));

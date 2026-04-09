@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryActivityLog;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryBusinessKeyMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryEventStore;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryInstanceDefinitionMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessDefinitionStore;
@@ -105,7 +106,7 @@ class TimerIntermediateCatchE2ETest {
 
         TokenExecutor tokenExecutor = new TokenExecutor(handlers);
         engine = new ProcessEngine(eventStore, definitionStore, tokenExecutor, sequenceGenerator,
-                new InMemoryInstanceDefinitionMapping(), new InMemoryProcessInstanceLock(), new InMemoryActivityLog());
+                new InMemoryInstanceDefinitionMapping(), new InMemoryProcessInstanceLock(), new InMemoryBusinessKeyMapping(), new InMemoryActivityLog());
     }
 
     /**
@@ -136,7 +137,7 @@ class TimerIntermediateCatchE2ETest {
         engine.deploy(definition);
 
         // Act
-        ProcessInstance instance = engine.startProcess("timer-process", Map.of());
+        ProcessInstance instance = engine.startProcess("timer-process", "test-biz-key", Map.of());
 
         // Assert
         assertThat(instance.getState()).isEqualTo(ProcessState.RUNNING);
@@ -156,7 +157,7 @@ class TimerIntermediateCatchE2ETest {
         // Arrange
         ProcessDefinition definition = createTimerProcess();
         engine.deploy(definition);
-        ProcessInstance started = engine.startProcess("timer-process", Map.of());
+        ProcessInstance started = engine.startProcess("timer-process", "test-biz-key", Map.of());
 
         Token waitingToken = started.getTokens().stream()
                 .filter(t -> t.getState() == TokenState.WAITING)
@@ -187,7 +188,7 @@ class TimerIntermediateCatchE2ETest {
         // Arrange
         ProcessDefinition definition = createTimerProcess();
         engine.deploy(definition);
-        ProcessInstance started = engine.startProcess("timer-process", Map.of());
+        ProcessInstance started = engine.startProcess("timer-process", "test-biz-key", Map.of());
 
         Token timerToken = started.getTokens().stream()
                 .filter(t -> t.getState() == TokenState.WAITING)

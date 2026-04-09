@@ -51,7 +51,7 @@ class TokenExecutorTest {
 
         Token token = Token.create("start1");
         ProcessInstance instance = ProcessInstance.restore(
-                UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token), Map.of(), Instant.now(), null
         );
         ExecutionContext context = new ExecutionContext(instance, definition);
@@ -78,7 +78,7 @@ class TokenExecutorTest {
 
         Token token = Token.create("start1");
         ProcessInstance instance = ProcessInstance.restore(
-                UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token), Map.of(), Instant.now(), null
         );
         ExecutionContext context = new ExecutionContext(instance, definition);
@@ -109,7 +109,7 @@ class TokenExecutorTest {
 
         Token token = Token.create("task1");
         ProcessInstance instance = ProcessInstance.restore(
-                UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token), Map.of(), Instant.now(), null
         );
         ExecutionContext context = new ExecutionContext(instance, definition);
@@ -148,7 +148,7 @@ class TokenExecutorTest {
 
         Token token = Token.create("start1");
         ProcessInstance instance = ProcessInstance.restore(
-                UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token), Map.of(), Instant.now(), null
         );
 

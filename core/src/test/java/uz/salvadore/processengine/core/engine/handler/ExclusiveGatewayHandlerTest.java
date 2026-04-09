@@ -66,7 +66,7 @@ class ExclusiveGatewayHandlerTest {
             Token token = Token.create("gw1");
             Map<String, Object> variables = Map.of("amount", 15000L);
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(token), variables, Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -108,7 +108,7 @@ class ExclusiveGatewayHandlerTest {
             Token token = Token.create("gw1");
             Map<String, Object> variables = Map.of("amount", 5000L);
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(token), variables, Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -154,7 +154,7 @@ class ExclusiveGatewayHandlerTest {
             Token token = Token.create("gw1");
             Map<String, Object> variables = Map.of("amount", 100L);
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(token), variables, Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -188,7 +188,7 @@ class ExclusiveGatewayHandlerTest {
 
             Token token = Token.create("gw1");
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(token), Map.of("amount", 100L), Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -221,7 +221,7 @@ class ExclusiveGatewayHandlerTest {
             Token token = Token.create("gw1");
             Map<String, Object> variables = Map.of("amount", 100L);
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(token), variables, Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -265,7 +265,7 @@ class ExclusiveGatewayHandlerTest {
             Token token = Token.create("gw1");
             Map<String, Object> variables = Map.of("amount", 500L);
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(token), variables, Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -309,7 +309,7 @@ class ExclusiveGatewayHandlerTest {
             Token token = Token.create("gw1");
             Map<String, Object> variables = Map.of("amount", 100L);
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(token), variables, Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -350,7 +350,7 @@ class ExclusiveGatewayHandlerTest {
             Token token = Token.create("gw1");
             Map<String, Object> variables = Map.of("amount", 500L);
             ProcessInstance instance = ProcessInstance.restore(
-                    UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                    UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                     List.of(token), variables, Instant.now(), null
             );
             ExecutionContext context = new ExecutionContext(instance, definition);
@@ -383,7 +383,7 @@ class ExclusiveGatewayHandlerTest {
         Token token = Token.create("gw1");
         UUID processInstanceId = UUID.randomUUID();
         ProcessInstance instance = ProcessInstance.restore(
-                processInstanceId, definition.getId(), null, ProcessState.RUNNING,
+                processInstanceId, definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token), Map.of("amount", 100L), Instant.now(), null
         );
         ExecutionContext context = new ExecutionContext(instance, definition);
