@@ -7,6 +7,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryActivityLog;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryBusinessKeyMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryChildInstanceMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryInstanceDefinitionMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessDefinitionStore;
@@ -29,6 +30,7 @@ import uz.salvadore.processengine.core.engine.handler.StartEventHandler;
 import uz.salvadore.processengine.core.engine.handler.TimerBoundaryEventHandler;
 import uz.salvadore.processengine.core.engine.handler.TimerIntermediateCatchEventHandler;
 import uz.salvadore.processengine.core.port.outgoing.ActivityLog;
+import uz.salvadore.processengine.core.port.outgoing.BusinessKeyMapping;
 import uz.salvadore.processengine.core.port.outgoing.ChildInstanceMapping;
 import uz.salvadore.processengine.core.port.outgoing.DeploymentListener;
 import uz.salvadore.processengine.core.port.outgoing.InstanceDefinitionMapping;
@@ -83,6 +85,12 @@ public class ProcessEngineAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public BusinessKeyMapping businessKeyMapping() {
+        return new InMemoryBusinessKeyMapping();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public ActivityLog activityLog() {
         return new InMemoryActivityLog();
     }
@@ -116,12 +124,13 @@ public class ProcessEngineAutoConfiguration {
                                        SequenceGenerator sequenceGenerator,
                                        InstanceDefinitionMapping instanceDefinitionMapping,
                                        ChildInstanceMapping childInstanceMapping,
+                                       BusinessKeyMapping businessKeyMapping,
                                        ProcessInstanceLock processInstanceLock,
                                        ActivityLog activityLog,
                                        List<DeploymentListener> deploymentListeners) {
         return new ProcessEngine(eventStore, definitionStore, tokenExecutor, sequenceGenerator,
-                instanceDefinitionMapping, childInstanceMapping, processInstanceLock, activityLog,
-                deploymentListeners);
+                instanceDefinitionMapping, childInstanceMapping, businessKeyMapping,
+                processInstanceLock, activityLog, deploymentListeners);
     }
 
     @Bean

@@ -44,7 +44,7 @@ class StartEventHandlerTest {
         UUID processInstanceId = UUID.randomUUID();
         Token token = Token.create("start1");
         ProcessInstance instance = ProcessInstance.restore(
-                processInstanceId, definition.getId(), null, ProcessState.RUNNING,
+                processInstanceId, definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token), Map.of(), Instant.now(), null
         );
 
@@ -80,7 +80,7 @@ class StartEventHandlerTest {
 
         Token token = Token.create("start1");
         ProcessInstance instance = ProcessInstance.restore(
-                UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token), Map.of(), Instant.now(), null
         );
 

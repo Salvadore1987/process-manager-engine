@@ -14,6 +14,7 @@ import uz.salvadore.processengine.core.domain.model.ProcessInstance;
 import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.condition.SimpleConditionEvaluator;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryActivityLog;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryBusinessKeyMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryInstanceDefinitionMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessDefinitionStore;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessInstanceLock;
@@ -106,7 +107,7 @@ class CompensationE2ETest {
         );
 
         TokenExecutor tokenExecutor = new TokenExecutor(handlers);
-        engine = new ProcessEngine(eventStore, definitionStore, tokenExecutor, sequenceGenerator, new InMemoryInstanceDefinitionMapping(), new InMemoryProcessInstanceLock(), new InMemoryActivityLog());
+        engine = new ProcessEngine(eventStore, definitionStore, tokenExecutor, sequenceGenerator, new InMemoryInstanceDefinitionMapping(), new InMemoryProcessInstanceLock(), new InMemoryBusinessKeyMapping(), new InMemoryActivityLog());
 
         // Parse and deploy the order-process BPMN
         BpmnParser parser = new BpmnParser();
@@ -127,7 +128,7 @@ class CompensationE2ETest {
         variables.put("amount", 15000L);
 
         // Act - Step 1: Start process, token advances to validate-order (topic: order.validate)
-        ProcessInstance instance = engine.startProcess("order-process", variables);
+        ProcessInstance instance = engine.startProcess("order-process", "test-biz-key", variables);
 
         // Assert - Token should be at validate-order
         assertThat(instance.getState()).isEqualTo(ProcessState.RUNNING);

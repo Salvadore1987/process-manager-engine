@@ -12,6 +12,7 @@ public class ProcessInstanceDtoMapper {
                 instance.getId(),
                 instance.getDefinitionId(),
                 instance.getParentProcessInstanceId(),
+                instance.getBusinessKey(),
                 instance.getState().name(),
                 instance.getVariables(),
                 instance.getStartedAt(),

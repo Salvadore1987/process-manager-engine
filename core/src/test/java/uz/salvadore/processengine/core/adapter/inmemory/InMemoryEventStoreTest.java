@@ -40,7 +40,7 @@ class InMemoryEventStoreTest {
             // Arrange
             UUID processInstanceId = UUID.randomUUID();
             ProcessStartedEvent event = new ProcessStartedEvent(
-                    UUID.randomUUID(), processInstanceId, UUID.randomUUID(), null,
+                    UUID.randomUUID(), processInstanceId, UUID.randomUUID(), null, null,
                     Map.of(), Instant.now(), 1L
             );
 
@@ -66,7 +66,7 @@ class InMemoryEventStoreTest {
                     UUID.randomUUID(), processInstanceId, tokenId, "node2", "node3", now, 3L
             );
             ProcessStartedEvent event1 = new ProcessStartedEvent(
-                    UUID.randomUUID(), processInstanceId, UUID.randomUUID(), null,
+                    UUID.randomUUID(), processInstanceId, UUID.randomUUID(), null, null,
                     Map.of(), now, 1L
             );
             TokenMovedEvent event2 = new TokenMovedEvent(
@@ -107,11 +107,11 @@ class InMemoryEventStoreTest {
             UUID processId1 = UUID.randomUUID();
             UUID processId2 = UUID.randomUUID();
             ProcessStartedEvent event1 = new ProcessStartedEvent(
-                    UUID.randomUUID(), processId1, UUID.randomUUID(), null,
+                    UUID.randomUUID(), processId1, UUID.randomUUID(), null, null,
                     Map.of(), Instant.now(), 1L
             );
             ProcessStartedEvent event2 = new ProcessStartedEvent(
-                    UUID.randomUUID(), processId2, UUID.randomUUID(), null,
+                    UUID.randomUUID(), processId2, UUID.randomUUID(), null, null,
                     Map.of(), Instant.now(), 1L
             );
 
@@ -138,7 +138,7 @@ class InMemoryEventStoreTest {
             UUID tokenId = UUID.randomUUID();
             Instant now = Instant.now();
             ProcessStartedEvent event1 = new ProcessStartedEvent(
-                    UUID.randomUUID(), processInstanceId, UUID.randomUUID(), null,
+                    UUID.randomUUID(), processInstanceId, UUID.randomUUID(), null, null,
                     Map.of(), now, 1L
             );
             TokenMovedEvent event2 = new TokenMovedEvent(
@@ -192,7 +192,7 @@ class InMemoryEventStoreTest {
                         for (int i = 0; i < eventsPerThread; i++) {
                             long seqNum = (long) threadIndex * eventsPerThread + i + 1;
                             ProcessStartedEvent event = new ProcessStartedEvent(
-                                    UUID.randomUUID(), processInstanceId, UUID.randomUUID(), null,
+                                    UUID.randomUUID(), processInstanceId, UUID.randomUUID(), null, null,
                                     Map.of(), Instant.now(), seqNum
                             );
                             eventStore.append(event);
@@ -225,9 +225,9 @@ class InMemoryEventStoreTest {
             UUID processId1 = UUID.randomUUID();
             UUID processId2 = UUID.randomUUID();
             eventStore.append(new ProcessStartedEvent(
-                    UUID.randomUUID(), processId1, UUID.randomUUID(), null, Map.of(), Instant.now(), 1L));
+                    UUID.randomUUID(), processId1, UUID.randomUUID(), null, null, Map.of(), Instant.now(), 1L));
             eventStore.append(new ProcessStartedEvent(
-                    UUID.randomUUID(), processId2, UUID.randomUUID(), null, Map.of(), Instant.now(), 1L));
+                    UUID.randomUUID(), processId2, UUID.randomUUID(), null, null, Map.of(), Instant.now(), 1L));
 
             // Act & Assert
             assertThat(eventStore.size()).isEqualTo(2);
@@ -239,7 +239,7 @@ class InMemoryEventStoreTest {
             // Arrange
             UUID processInstanceId = UUID.randomUUID();
             eventStore.append(new ProcessStartedEvent(
-                    UUID.randomUUID(), processInstanceId, UUID.randomUUID(), null, Map.of(), Instant.now(), 1L));
+                    UUID.randomUUID(), processInstanceId, UUID.randomUUID(), null, null, Map.of(), Instant.now(), 1L));
 
             // Act
             eventStore.clear();

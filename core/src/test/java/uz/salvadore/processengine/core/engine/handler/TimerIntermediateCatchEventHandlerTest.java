@@ -54,7 +54,7 @@ class TimerIntermediateCatchEventHandlerTest {
 
     private ExecutionContext createContext(UUID processInstanceId, ProcessDefinition definition, Token token) {
         ProcessInstance instance = ProcessInstance.restore(
-                processInstanceId, definition.getId(), null, ProcessState.RUNNING,
+                processInstanceId, definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token), Map.of(), Instant.now(), null
         );
         return new ExecutionContext(instance, definition);

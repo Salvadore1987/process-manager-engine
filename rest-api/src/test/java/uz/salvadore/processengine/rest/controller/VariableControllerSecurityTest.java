@@ -54,7 +54,7 @@ class VariableControllerSecurityTest {
     void shouldAllowViewerToGetVariables() throws Exception {
         // Arrange
         UUID instanceId = UUID.randomUUID();
-        ProcessInstance instance = ProcessInstance.create(UUID.randomUUID(), Map.of("key", "value"));
+        ProcessInstance instance = ProcessInstance.create(UUID.randomUUID(), "test-biz-key", Map.of("key", "value"));
         when(processEngine.getProcessInstance(instanceId)).thenReturn(instance);
 
         // Act & Assert
@@ -80,7 +80,7 @@ class VariableControllerSecurityTest {
     void shouldAllowOperatorToUpdateVariables() throws Exception {
         // Arrange
         UUID instanceId = UUID.randomUUID();
-        ProcessInstance instance = ProcessInstance.create(UUID.randomUUID(), Map.of("key", "value"));
+        ProcessInstance instance = ProcessInstance.create(UUID.randomUUID(), "test-biz-key", Map.of("key", "value"));
         when(processEngine.getProcessInstance(instanceId)).thenReturn(instance);
 
         // Act & Assert

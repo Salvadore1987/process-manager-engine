@@ -15,6 +15,7 @@ import uz.salvadore.processengine.core.domain.model.Token;
 import uz.salvadore.processengine.core.engine.condition.SimpleConditionEvaluator;
 import uz.salvadore.processengine.core.engine.eventsourcing.EventApplier;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryActivityLog;
+import uz.salvadore.processengine.core.adapter.inmemory.InMemoryBusinessKeyMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryInstanceDefinitionMapping;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessDefinitionStore;
 import uz.salvadore.processengine.core.adapter.inmemory.InMemoryProcessInstanceLock;
@@ -87,7 +88,7 @@ class OrderProcessE2ETest {
         );
 
         TokenExecutor tokenExecutor = new TokenExecutor(handlers);
-        engine = new ProcessEngine(eventStore, definitionStore, tokenExecutor, sequenceGenerator, new InMemoryInstanceDefinitionMapping(), new InMemoryProcessInstanceLock(), new InMemoryActivityLog());
+        engine = new ProcessEngine(eventStore, definitionStore, tokenExecutor, sequenceGenerator, new InMemoryInstanceDefinitionMapping(), new InMemoryProcessInstanceLock(), new InMemoryBusinessKeyMapping(), new InMemoryActivityLog());
 
         // Parse and deploy the order process BPMN
         BpmnParser parser = new BpmnParser();
@@ -112,7 +113,7 @@ class OrderProcessE2ETest {
             variables.put("orderId", "ORD-001");
 
             // Act - Step 1: Start process, token advances to Task_ValidateOrder (ServiceTask, WAITING)
-            ProcessInstance instance = engine.startProcess("order-processing", variables);
+            ProcessInstance instance = engine.startProcess("order-processing", "test-biz-key", variables);
 
             // Assert - Token should be at Task_ValidateOrder
             assertThat(instance.getState()).isEqualTo(ProcessState.RUNNING);
@@ -193,7 +194,7 @@ class OrderProcessE2ETest {
             variables.put("orderId", "ORD-HIGH-001");
 
             // Act - Step 1: Start process
-            ProcessInstance instance = engine.startProcess("order-processing", variables);
+            ProcessInstance instance = engine.startProcess("order-processing", "test-biz-key", variables);
 
             // Assert - At Task_ValidateOrder
             assertThat(messageTransport.sendCalls).hasSize(1);
@@ -264,7 +265,7 @@ class OrderProcessE2ETest {
             variables.put("orderAmount", 5000L);
             variables.put("orderId", "ORD-REPLAY");
 
-            ProcessInstance instance = engine.startProcess("order-processing", variables);
+            ProcessInstance instance = engine.startProcess("order-processing", "test-biz-key", variables);
             UUID validateTokenId = messageTransport.sendCalls.getFirst().correlationId();
             instance = engine.completeTask(validateTokenId, Map.of("validated", true));
 
@@ -288,7 +289,7 @@ class OrderProcessE2ETest {
             Map<String, Object> variables = new HashMap<>();
             variables.put("orderAmount", 5000L);
 
-            ProcessInstance instance = engine.startProcess("order-processing", variables);
+            ProcessInstance instance = engine.startProcess("order-processing", "test-biz-key", variables);
 
             // Complete validate
             UUID validateId = messageTransport.sendCalls.getFirst().correlationId();

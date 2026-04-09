@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -59,9 +60,9 @@ class InstanceControllerSecurityTest {
     void shouldAllowOperatorToStartInstance() throws Exception {
         // Arrange
         UUID definitionId = UUID.randomUUID();
-        ProcessInstance instance = ProcessInstance.create(definitionId, Map.of("orderId", "123"));
-        StartProcessRequestDto request = new StartProcessRequestDto("order-processing", Map.of("orderId", "123"));
-        when(processEngine.startProcess(eq("order-processing"), anyMap())).thenReturn(instance);
+        ProcessInstance instance = ProcessInstance.create(definitionId, "test-biz-key", Map.of("orderId", "123"));
+        StartProcessRequestDto request = new StartProcessRequestDto("order-processing", "test-biz-key", Map.of("orderId", "123"));
+        when(processEngine.startProcess(eq("order-processing"), anyString(), anyMap())).thenReturn(instance);
 
         // Act & Assert
         mockMvc.perform(post("/api/v1/instances")
@@ -74,7 +75,7 @@ class InstanceControllerSecurityTest {
     @Test
     void shouldDenyViewerToStartInstance() throws Exception {
         // Arrange
-        StartProcessRequestDto request = new StartProcessRequestDto("order-processing", Map.of());
+        StartProcessRequestDto request = new StartProcessRequestDto("order-processing", "test-biz-key", Map.of());
 
         // Act & Assert
         mockMvc.perform(post("/api/v1/instances")
@@ -89,7 +90,7 @@ class InstanceControllerSecurityTest {
         // Arrange
         UUID instanceId = UUID.randomUUID();
         UUID definitionId = UUID.randomUUID();
-        ProcessInstance instance = ProcessInstance.create(definitionId, Map.of());
+        ProcessInstance instance = ProcessInstance.create(definitionId, "test-biz-key", Map.of());
         when(processEngine.getProcessInstance(instanceId)).thenReturn(instance);
 
         // Act & Assert

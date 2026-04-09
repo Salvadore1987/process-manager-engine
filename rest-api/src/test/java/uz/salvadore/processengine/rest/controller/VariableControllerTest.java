@@ -54,7 +54,7 @@ class VariableControllerTest {
     void shouldGetVariablesAndReturn200() throws Exception {
         // Arrange
         UUID definitionId = UUID.randomUUID();
-        ProcessInstance instance = ProcessInstance.create(definitionId, Map.of("orderId", "12345", "amount", 100));
+        ProcessInstance instance = ProcessInstance.create(definitionId, "test-biz-key", Map.of("orderId", "12345", "amount", 100));
         when(processEngine.getProcessInstance(instance.getId())).thenReturn(instance);
 
         // Act & Assert
@@ -68,7 +68,7 @@ class VariableControllerTest {
     void shouldGetVariableByNameAndReturn200() throws Exception {
         // Arrange
         UUID definitionId = UUID.randomUUID();
-        ProcessInstance instance = ProcessInstance.create(definitionId, Map.of("orderId", "12345"));
+        ProcessInstance instance = ProcessInstance.create(definitionId, "test-biz-key", Map.of("orderId", "12345"));
         when(processEngine.getProcessInstance(instance.getId())).thenReturn(instance);
 
         // Act & Assert
@@ -80,7 +80,7 @@ class VariableControllerTest {
     void shouldReturn404WhenVariableNotFoundByName() throws Exception {
         // Arrange
         UUID definitionId = UUID.randomUUID();
-        ProcessInstance instance = ProcessInstance.create(definitionId, Map.of("orderId", "12345"));
+        ProcessInstance instance = ProcessInstance.create(definitionId, "test-biz-key", Map.of("orderId", "12345"));
         when(processEngine.getProcessInstance(instance.getId())).thenReturn(instance);
 
         // Act & Assert
@@ -92,7 +92,7 @@ class VariableControllerTest {
     void shouldUpdateVariablesAndReturn200() throws Exception {
         // Arrange
         UUID definitionId = UUID.randomUUID();
-        ProcessInstance instance = ProcessInstance.create(definitionId, Map.of("orderId", "12345"));
+        ProcessInstance instance = ProcessInstance.create(definitionId, "test-biz-key", Map.of("orderId", "12345"));
         when(processEngine.getProcessInstance(instance.getId())).thenReturn(instance);
 
         Map<String, Object> newVariables = Map.of("orderId", "99999", "status", "updated");

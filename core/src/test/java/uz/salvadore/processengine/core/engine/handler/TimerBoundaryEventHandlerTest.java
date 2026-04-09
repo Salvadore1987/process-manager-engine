@@ -68,7 +68,7 @@ class TimerBoundaryEventHandlerTest {
         Token token = Token.create("timer1");
         UUID processInstanceId = UUID.randomUUID();
         ProcessInstance instance = ProcessInstance.restore(
-                processInstanceId, definition.getId(), null, ProcessState.RUNNING,
+                processInstanceId, definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token), Map.of(), Instant.now(), null
         );
         ExecutionContext context = new ExecutionContext(instance, definition);
@@ -111,7 +111,7 @@ class TimerBoundaryEventHandlerTest {
 
         Token token = Token.create("timer1");
         ProcessInstance instance = ProcessInstance.restore(
-                UUID.randomUUID(), definition.getId(), null, ProcessState.RUNNING,
+                UUID.randomUUID(), definition.getId(), null, null, ProcessState.RUNNING,
                 List.of(token), Map.of(), Instant.now(), null
         );
         ExecutionContext context = new ExecutionContext(instance, definition);

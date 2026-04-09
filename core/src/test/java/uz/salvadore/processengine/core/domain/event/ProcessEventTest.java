@@ -21,7 +21,7 @@ class ProcessEventTest {
 
         // Act
         ProcessStartedEvent event = new ProcessStartedEvent(
-                UUIDv7.generate(), processInstanceId, defId, null, Map.of("key", "val"), Instant.now(), 1);
+                UUIDv7.generate(), processInstanceId, defId, null, null, Map.of("key", "val"), Instant.now(), 1);
 
         // Assert
         assertThat(event.processInstanceId()).isEqualTo(processInstanceId);
@@ -76,7 +76,7 @@ class ProcessEventTest {
     void shouldPreserveSequenceNumberOrdering() {
         // Arrange & Act
         ProcessStartedEvent first = new ProcessStartedEvent(
-                UUIDv7.generate(), processInstanceId, UUIDv7.generate(), null, Map.of(), Instant.now(), 1);
+                UUIDv7.generate(), processInstanceId, UUIDv7.generate(), null, null, Map.of(), Instant.now(), 1);
         TokenMovedEvent second = new TokenMovedEvent(
                 UUIDv7.generate(), processInstanceId, UUIDv7.generate(), "a", "b", Instant.now(), 2);
         ProcessCompletedEvent third = new ProcessCompletedEvent(
